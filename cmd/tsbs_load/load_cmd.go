@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+
 	"github.com/blagojts/viper"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -57,12 +58,6 @@ func initLoadSubCommands() []*cobra.Command {
 
 	return commands
 }
-
-export http_proxy=http://127.0.0.1:21087
-export https_proxy=https://127.0.0.1:21087
-
-git config --global http.proxy http://127.0.0.1:21087
-git config --global https.proxy https://127.0.0.1:21087
 
 func createRunLoad(target targets.ImplementedTarget) cmdRunner {
 	return func(cmd *cobra.Command, args []string) {
