@@ -29,6 +29,6 @@ func (t *datalayersTarget) Serializer() serialize.PointSerializer {
 	return &Serializer{}
 }
 
-func (t *datalayersTarget) Benchmark(targetDB string, dataSourceConfig *source.DataSourceConfig, v *viper.Viper) (targets.Benchmark, error) {
-	return NewBenchmark(targetDB, dataSourceConfig, v)
+func (t *datalayersTarget) Benchmark(targetDB string, dataSourceConfig *source.DataSourceConfig, dataSpecificConfig *viper.Viper) (targets.Benchmark, error) {
+	return NewBenchmark(targetDB, dataSourceConfig, dataSpecificConfig)
 }

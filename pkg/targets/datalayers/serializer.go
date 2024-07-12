@@ -2,6 +2,9 @@ package datalayers
 
 import (
 	"io"
+	"log"
+	"strconv"
+	"strings"
 
 	"github.com/timescale/tsbs/pkg/data"
 	"github.com/timescale/tsbs/pkg/data/serialize"
@@ -31,6 +34,7 @@ func (s *Serializer) Serialize(p *data.Point, w io.Writer) error {
 	}
 
 	buf := make([]byte, 0, 256)
+	dataTypes := make([]string, 0, 16)
 
 	// Appends the measurement name.
 	buf = serialize.FastFormatAppend(p.MeasurementName(), buf)
@@ -41,13 +45,22 @@ func (s *Serializer) Serialize(p *data.Point, w io.Writer) error {
 	buf = append(buf, ' ')
 
 	// Appends tags.
-	buf = appendKeyValues(p.TagKeys(), p.TagValues(), buf)
+	buf, dataTypes = appendKeyValues(p.TagKeys(), p.TagValues(), buf, dataTypes)
 	if numTags > 0 && numFields > 0 {
 		buf = append(buf, ' ')
 	}
 
 	// Appends fields.
-	buf = appendKeyValues(p.FieldKeys(), p.FieldValues(), buf)
+	buf, dataTypes = appendKeyValues(p.FieldKeys(), p.FieldValues(), buf, dataTypes)
+
+	// Appends data types.
+	if len(dataTypes) > 0 {
+		buf = append(buf, ' ')
+		compressedDataTypes := strings.Join(dataTypes, ",")
+		buf = serialize.FastFormatAppend(compressedDataTypes, buf)
+	}
+
+	// Appends a line separator.
 	buf = append(buf, '\n')
 
 	// Writes the serialized data point.
@@ -56,7 +69,7 @@ func (s *Serializer) Serialize(p *data.Point, w io.Writer) error {
 }
 
 // Appends all key-value pairs into the buffer and returns the extended buffer.
-func appendKeyValues(keys [][]byte, values []interface{}, buf []byte) []byte {
+func appendKeyValues(keys [][]byte, values []interface{}, buf []byte, dataTypes []string) ([]byte, []string) {
 	for i := 0; i < len(keys); i++ {
 		k := keys[i]
 		v := values[i]
@@ -72,6 +85,33 @@ func appendKeyValues(keys [][]byte, values []interface{}, buf []byte) []byte {
 		if i < len(keys)-1 {
 			buf = append(buf, ' ')
 		}
+
+		dataType := getDataType(v)
+		dataTypes = append(dataTypes, strconv.Itoa(int(dataType)))
 	}
-	return buf
+	return buf, dataTypes
+}
+
+func getDataType(v interface{}) DataType {
+	switch v.(type) {
+	case nil:
+		return DataTypeNil
+	case bool:
+		return DataTypeBool
+	case int, int32:
+		return DataTypeInt32
+	case int64:
+		return DataTypeInt64
+	case float32:
+		return DataTypeFloat32
+	case float64:
+		return DataTypeFloat64
+	case []byte:
+		return DataTypeBinary
+	case string:
+		return DataTypeString
+	default:
+		log.Panicf("unexpected data type. value: %v", v)
+	}
+	return DataTypeNil
 }

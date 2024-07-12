@@ -83,7 +83,7 @@ func TestPointNoTags() *data.Point {
 }
 
 func TestPointNoFields() *data.Point {
-	return generateTestPoint(TestMeasurement, [][]byte{[]byte("hostname")}, []interface{}{[]byte("host_0")}, &TestNow,
+	return generateTestPoint(TestMeasurement, [][]byte{[]byte("hostname")}, []interface{}{"host_0"}, &TestNow,
 		[][]byte{}, []interface{}{})
 }
 
