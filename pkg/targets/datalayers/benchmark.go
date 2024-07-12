@@ -9,10 +9,11 @@ import (
 )
 
 // Wraps the context used during a benchmark.
+// The point indexer is constructed on the call GetPointIndexer
+// since the maxPartitions is not available for NewBenchmark.
 type benchmark struct {
 	dataSource   targets.DataSource
 	batchFactory targets.BatchFactory
-	pointIndexer targets.PointIndexer
 	processor    targets.Processor
 	dBCreator    targets.DBCreator
 }
@@ -25,7 +26,6 @@ func NewBenchmark(targetDB string, dataSourceConfig *source.DataSourceConfig, v 
 	benchmark := benchmark{
 		dataSource:   NewDataSource(dataSourceConfig.File.Location),
 		batchFactory: NewBatchFactory(),
-		pointIndexer: NewPointIndexer(),
 		processor:    NewProcessor(),
 		dBCreator:    NewDBCreator(),
 	}
@@ -44,7 +44,7 @@ func (b *benchmark) GetBatchFactory() targets.BatchFactory {
 
 // GetPointIndexer returns the PointIndexer to use for this Benchmark
 func (b *benchmark) GetPointIndexer(maxPartitions uint) targets.PointIndexer {
-	return b.pointIndexer
+	return NewPointIndexer(maxPartitions)
 }
 
 // GetProcessor returns the Processor to use for this Benchmark
