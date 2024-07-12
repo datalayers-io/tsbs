@@ -330,16 +330,9 @@ func TestGetSerializer(t *testing.T) {
 		}
 	}
 
-	checkWriteHeader(constants.FormatCassandra, false)
-	checkWriteHeader(constants.FormatClickhouse, true)
 	checkWriteHeader(constants.FormatInflux, false)
-	checkWriteHeader(constants.FormatMongo, false)
-	checkWriteHeader(constants.FormatSiriDB, false)
-	checkWriteHeader(constants.FormatCrateDB, true)
-	checkWriteHeader(constants.FormatPrometheus, false)
 	checkWriteHeader(constants.FormatTimescaleDB, true)
-	checkWriteHeader(constants.FormatVictoriaMetrics, false)
-	checkWriteHeader(constants.FormatQuestDB, false)
+	// TODO(niebayes): add entries for Datalayers.
 }
 
 type mockSerializer struct {

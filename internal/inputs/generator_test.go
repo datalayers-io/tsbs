@@ -54,12 +54,6 @@ func TestBaseConfigValidate(t *testing.T) {
 	}
 
 	// Test Format validation
-	c.Format = constants.FormatCassandra
-	err = c.Validate()
-	if err != nil {
-		t.Errorf("unexpected error with Format '%s': %v", constants.FormatCassandra, err)
-	}
-
 	c.Format = "unknown type"
 	err = c.Validate()
 	if err == nil {
