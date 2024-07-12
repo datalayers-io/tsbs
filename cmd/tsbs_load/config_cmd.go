@@ -35,7 +35,7 @@ func initConfigCMD() *cobra.Command {
 	)
 	cmd.PersistentFlags().String(
 		targetDbFlag,
-		constants.FormatPrometheus,
+		constants.FormatInflux,
 		"specify target db, valid: "+strings.Join(constants.SupportedFormats(), ", "),
 	)
 	return cmd

@@ -129,10 +129,6 @@ func (g *DataGenerator) runSimulator(sim common.Simulator, serializer serialize.
 
 func (g *DataGenerator) getSerializer(sim common.Simulator, target targets.ImplementedTarget) (serialize.PointSerializer, error) {
 	switch target.TargetName() {
-	case constants.FormatCrateDB:
-		fallthrough
-	case constants.FormatClickhouse:
-		fallthrough
 	case constants.FormatTimescaleDB:
 		g.writeHeader(sim.Headers())
 	}
