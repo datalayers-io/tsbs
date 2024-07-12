@@ -8,6 +8,10 @@ import (
 type processor struct {
 }
 
+func NewProcessor() targets.Processor {
+	return &processor{}
+}
+
 // Init does per-worker setup needed before receiving data
 func (p *processor) Init(workerNum int, doLoad, hashWorkers bool) {
 	panic("")

@@ -4,14 +4,16 @@ import (
 	datalayers "github.com/timescale/tsbs/pkg/targets/datalayers/client"
 )
 
-var benchmarkDbName string = "benchmark"
-
 // DBCreator is an interface for a benchmark to do the initial setup of a database
 // in preparation for running a benchmark against it.
 //
 // Datalayers' implementation of the DBCreator interface.
 type dBCreator struct {
 	client *datalayers.Client
+}
+
+func NewDBCreator() *dBCreator {
+	return &dBCreator{client: nil}
 }
 
 // Init should set up any connection or other setup for talking to the DB, but should NOT create any databases
