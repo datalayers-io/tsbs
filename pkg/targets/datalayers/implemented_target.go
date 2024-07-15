@@ -17,6 +17,7 @@ func NewTarget() targets.ImplementedTarget {
 
 func (t *datalayersTarget) TargetSpecificFlags(flagPrefix string, flagSet *pflag.FlagSet) {
 	flagSet.String(flagPrefix+"sql-endpoint", "127.0.0.1:8360", "Datalayers' Arrow FlightSql endpoint")
+	flagSet.Uint(flagPrefix+"batch-size", 5000, "The capacity of each batch. Should be identical with the runner's batch size configuraiton")
 }
 
 func (t *datalayersTarget) TargetName() string {
@@ -27,9 +28,9 @@ func (t *datalayersTarget) Serializer() serialize.PointSerializer {
 	return &Serializer{}
 }
 
-func (t *datalayersTarget) Benchmark(targetDB string, dataSourceConfig *source.DataSourceConfig, v *viper.Viper) (targets.Benchmark, error) {
+func (t *datalayersTarget) Benchmark(targetDB string, dataSourceConfig *source.DataSourceConfig, dbSpecificViper *viper.Viper) (targets.Benchmark, error) {
 	var datalayersConfig datalayersConfig
-	if err := v.Unmarshal(&datalayersConfig); err != nil {
+	if err := dbSpecificViper.Unmarshal(&datalayersConfig); err != nil {
 		return nil, err
 	}
 	return NewBenchmark(targetDB, dataSourceConfig, &datalayersConfig)

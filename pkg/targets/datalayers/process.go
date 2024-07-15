@@ -10,14 +10,15 @@ import (
 
 // Processor is a type that processes the work for a loading worker
 type processor struct {
-	client *datalayers.Client
+	targetDB string
+	client   *datalayers.Client
 	// key: measurement table, aka. table name.
 	// value: the context for writing data batch to the table.
 	writeContexts map[string]*writeContext
 }
 
-func NewProcessor(client *datalayers.Client) targets.Processor {
-	return &processor{client: client, writeContexts: make(map[string]*writeContext)}
+func NewProcessor(client *datalayers.Client, targetDB string) targets.Processor {
+	return &processor{targetDB: targetDB, client: client, writeContexts: make(map[string]*writeContext)}
 }
 
 // Init does per-worker setup needed before receiving data
@@ -37,7 +38,7 @@ func (proc *processor) ProcessBatch(b targets.Batch, doLoad bool) (metricCount, 
 	for _, point := range batch.points {
 		_, exist := proc.writeContexts[point.measurement]
 		if !exist {
-			proc.writeContexts[point.measurement] = NewWriteContext(proc.client, &point)
+			proc.writeContexts[point.measurement] = NewWriteContext(proc.client, &point, proc.targetDB)
 		}
 		writeContext := proc.writeContexts[point.measurement]
 		writeContext.append(&point)
