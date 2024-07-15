@@ -29,7 +29,8 @@ tsbs_load load \
     --loader.runner.batch-size=5000 \
     --loader.runner.seed=42 \
     --loader.runner.reporting-period=5s \
-    --db-specific.sql-endpoint="127.0.0.1:8360"
+    --loader.runner.results-file="./cpu-only-result.json \
+    --loader.db-specific.sql-endpoint="127.0.0.1:8360"
 
 ## Generate queries
 TODO

@@ -1,11 +1,12 @@
 package datalayers
 
 import (
+	"fmt"
 	"io"
-	"log"
 	"strconv"
 	"strings"
 
+	"github.com/apache/arrow/go/v16/arrow"
 	"github.com/timescale/tsbs/pkg/data"
 	"github.com/timescale/tsbs/pkg/data/serialize"
 )
@@ -93,26 +94,25 @@ func appendKeyValues(keys [][]byte, values []interface{}, buf []byte, dataTypes 
 	return buf, dataTypes
 }
 
-func getDataType(v interface{}) DataType {
+func getDataType(v interface{}) arrow.Type {
 	switch v.(type) {
 	case nil:
-		return DataTypeNil
+		return arrow.NULL
 	case bool:
-		return DataTypeBool
+		return arrow.BOOL
 	case int, int32:
-		return DataTypeInt32
+		return arrow.INT32
 	case int64:
-		return DataTypeInt64
+		return arrow.INT64
 	case float32:
-		return DataTypeFloat32
+		return arrow.FLOAT32
 	case float64:
-		return DataTypeFloat64
+		return arrow.FLOAT64
 	case []byte:
-		return DataTypeBinary
+		return arrow.BINARY
 	case string:
-		return DataTypeString
+		return arrow.STRING
 	default:
-		log.Panicf("unexpected data type. value: %v", v)
+		panic(fmt.Sprintf("The type of the value cannot be deduced. value: %v", v))
 	}
-	return DataTypeNil
 }

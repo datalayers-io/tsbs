@@ -10,6 +10,7 @@ import (
 
 type datalayersConfig struct {
 	sqlEndpoint string `yaml:"sql-endpoint"`
+	batchSize   uint   `yaml:"batch-size"`
 }
 
 // Wraps the context used during a benchmark.
@@ -35,8 +36,8 @@ func NewBenchmark(targetDB string, dataSourceConfig *source.DataSourceConfig, da
 
 	benchmark := benchmark{
 		dataSource:   NewDataSource(dataSourceConfig.File.Location),
-		batchFactory: NewBatchFactory(),
-		processor:    NewProcessor(datalayersClient),
+		batchFactory: NewBatchFactory(datalayersConfig.batchSize),
+		processor:    NewProcessor(datalayersClient, targetDB),
 		dBCreator:    NewDBCreator(datalayersClient),
 	}
 	return &benchmark, nil

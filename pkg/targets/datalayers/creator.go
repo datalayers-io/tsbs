@@ -1,7 +1,7 @@
 package datalayers
 
 import (
-	"log"
+	// "log"
 
 	datalayers "github.com/timescale/tsbs/pkg/targets/datalayers/client"
 )
@@ -45,9 +45,9 @@ func (dc *dBCreator) RemoveOldDB(dbName string) error {
 //
 // Close cleans up any database connections. Only needed by the DBCreatorCloser interface.
 func (dc *dBCreator) Close() {
-	if err := dc.client.Close(); err != nil {
-		log.Fatalf("failed to close the db creator. error: %v", err)
-	}
+	// if err := dc.client.Close(); err != nil {
+	// 	log.Fatalf("failed to close the db creator. error: %v", err)
+	// }
 }
 
 // DBCreatorPost is a DBCreator that also needs to do some initialization after the

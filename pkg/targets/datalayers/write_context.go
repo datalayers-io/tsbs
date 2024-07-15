@@ -20,7 +20,7 @@ type writeContext struct {
 	preparedStatement *flightsql.PreparedStatement
 }
 
-func NewWriteContext(client *datalayers.Client, p *point) *writeContext {
+func NewWriteContext(client *datalayers.Client, p *point, targetDB string) *writeContext {
 	numFields := len(p.fields) + 1
 	fieldNames := make([]string, numFields)
 	placeholders := make([]string, numFields)
@@ -35,16 +35,16 @@ func NewWriteContext(client *datalayers.Client, p *point) *writeContext {
 	})
 
 	for _, field := range p.fields {
-		fieldNames = append(fieldNames, field.key)
+		fieldNames = append(fieldNames, field.name)
 		placeholders = append(placeholders, "?")
 		arrowFields = append(arrowFields, arrow.Field{
-			Name:     field.key,
-			Type:     dataTypeToArrowDataType(field.dataType),
+			Name:     field.name,
+			Type:     field.dataType,
 			Nullable: true,
 		})
 	}
 
-	preparedQuery := fmt.Sprintf("INSERT INTO %v (%v) VALUES (%v)", p.measurement, strings.Join(fieldNames, ","), strings.Join(placeholders, ","))
+	preparedQuery := fmt.Sprintf("INSERT INTO %v.%v (%v) VALUES (%v)", targetDB, p.measurement, strings.Join(fieldNames, ","), strings.Join(placeholders, ","))
 	log.Infof("the prepared query for table %v is: %v", p.measurement, preparedQuery)
 
 	preparedStatement, err := client.Prepare(preparedQuery)
@@ -53,10 +53,10 @@ func NewWriteContext(client *datalayers.Client, p *point) *writeContext {
 	}
 
 	arrowSchema := arrow.NewSchema(arrowFields, nil)
-	// TODO(niebayes): is it good to assign an allocator to each record builder?
+	// FIXME(niebayes): is it good to assign an allocator to each record builder?
 	arrowRecordBuilder := array.NewRecordBuilder(memory.NewGoAllocator(), arrowSchema)
 
-	return &writeContext{arrowFields: arrowFields[1:], arrowRecordBuilder: arrowRecordBuilder, preparedStatement: preparedStatement}
+	return &writeContext{arrowFields, arrowRecordBuilder, preparedStatement}
 }
 
 func (ctx *writeContext) append(p *point) {
@@ -64,9 +64,11 @@ func (ctx *writeContext) append(p *point) {
 	appendFieldValue(arrowRecordBuilder.Field(0), arrow.FixedWidthTypes.Time64ns, p.timestamp)
 	for i, field := range p.fields {
 		fieldBuilder := arrowRecordBuilder.Field(i + 1)
-		fieldType := dataTypeToArrowDataType(field.dataType)
-		fieldValue := field.value
-		appendFieldValue(fieldBuilder, fieldType, fieldValue)
+		if field.value == NULL {
+			fieldBuilder.AppendNull()
+		} else {
+			appendFieldValue(fieldBuilder, field.dataType, field.value)
+		}
 	}
 }
 
@@ -123,25 +125,7 @@ func appendFieldValue(fieldBuilder array.Builder, fieldType arrow.DataType, fiel
 			panic(fmt.Sprintf("failed to convert a string to timestamp. error: %v", err))
 		}
 		builder.Append(v)
+	default:
+		panic(fmt.Sprintf("unexpected field type: %v", fieldType))
 	}
-}
-
-func dataTypeToArrowDataType(dataType DataType) arrow.DataType {
-	switch dataType {
-	case DataTypeBool:
-		return arrow.FixedWidthTypes.Boolean
-	case DataTypeInt32:
-		return arrow.PrimitiveTypes.Int32
-	case DataTypeInt64:
-		return arrow.PrimitiveTypes.Int64
-	case DataTypeFloat32:
-		return arrow.PrimitiveTypes.Float32
-	case DataTypeFloat64:
-		return arrow.PrimitiveTypes.Float64
-	case DataTypeBinary:
-		return arrow.BinaryTypes.Binary
-	case DataTypeString:
-		return arrow.BinaryTypes.String
-	}
-	panic(fmt.Sprintf("cannot convert data type %v to arrow data type", dataType))
 }

@@ -2,11 +2,12 @@ package datalayers
 
 import (
 	"bufio"
-	"errors"
+	"fmt"
 	"log"
 	"strconv"
 	"strings"
 
+	"github.com/apache/arrow/go/v16/arrow"
 	"github.com/timescale/tsbs/load"
 	"github.com/timescale/tsbs/pkg/data"
 	"github.com/timescale/tsbs/pkg/data/usecases/common"
@@ -24,33 +25,9 @@ import (
 // To determine which channel should a data point go to, we use the point indexer to
 // set the index of channels for each data point and send the data point to the corresponding channel.
 
-type DataType int
-
-const (
-	DataTypeNil DataType = iota
-	DataTypeBool
-	DataTypeInt32
-	DataTypeInt64
-	DataTypeFloat32
-	DataTypeFloat64
-	DataTypeBinary
-	DataTypeString
-)
-
-func strToDataType(str string) (DataType, error) {
-	i, err := strconv.Atoi(str)
-	if err != nil {
-		return DataTypeNil, err
-	}
-	if i < int(DataTypeNil) || i > int(DataTypeString) {
-		return DataTypeNil, errors.New("invalid data type string")
-	}
-	return DataType(i), nil
-}
-
 type field struct {
-	dataType DataType
-	key      string
+	dataType arrow.DataType
+	name     string
 	value    string
 }
 
@@ -103,21 +80,19 @@ func (ds *dataSource) NextItem() data.LoadedPoint {
 func decodePoint(tokens []string) (point, error) {
 	measurement := tokens[0]
 	timestamp := tokens[1]
+	compressedDataTypes := tokens[len(tokens)-1]
 
-	dataTypes := strings.Split(tokens[len(tokens)-1], ",")
+	dataTypes := strings.Split(compressedDataTypes, ",")
 	fields := make([]field, len(dataTypes))
-	for i, rawTp := range dataTypes {
-		dataType, err := strToDataType(rawTp)
-		if err != nil {
-			return point{}, err
-		}
+	for i, s := range dataTypes {
+		dataType := arrowDataTypeFromString(s)
 
 		keyValue := tokens[2+i]
 		parts := strings.Split(keyValue, "=")
-		key := parts[0]
+		name := parts[0]
 		value := parts[1]
 
-		fields = append(fields, field{dataType, key, value})
+		fields = append(fields, field{dataType, name, value})
 	}
 
 	return point{measurement, timestamp, fields}, nil
@@ -176,15 +151,45 @@ func (b *batch) Append(loadedPoint data.LoadedPoint) {
 }
 
 // BatchFactory returns a new empty batch for storing points.
-type batchFactory struct{}
+type batchFactory struct {
+	capacity uint
+}
 
 // Creates a new batch factory.
-func NewBatchFactory() targets.BatchFactory {
-	return &batchFactory{}
+func NewBatchFactory(capacity uint) targets.BatchFactory {
+	return &batchFactory{capacity}
 }
 
 // New returns a new Batch to add Points to
 func (bf *batchFactory) New() targets.Batch {
-	// TODO(niebayes): maybe make the initial capacity of the points array configurable.
-	return &batch{points: make([]point, 0, 256)}
+	return &batch{points: make([]point, 0, bf.capacity)}
+}
+
+func arrowDataTypeFromString(s string) arrow.DataType {
+	i, err := strconv.Atoi(s)
+	if err != nil {
+		panic(fmt.Sprintf("failed to convert a string to arrow data type. error: %v", err))
+	}
+
+	tp := arrow.Type(i)
+	switch tp {
+	case arrow.NULL:
+		return arrow.Null
+	case arrow.BOOL:
+		return arrow.FixedWidthTypes.Boolean
+	case arrow.INT32:
+		return arrow.PrimitiveTypes.Int32
+	case arrow.INT64:
+		return arrow.PrimitiveTypes.Int64
+	case arrow.FLOAT32:
+		return arrow.PrimitiveTypes.Float32
+	case arrow.FLOAT64:
+		return arrow.PrimitiveTypes.Float64
+	case arrow.BINARY:
+		return arrow.BinaryTypes.Binary
+	case arrow.STRING:
+		return arrow.BinaryTypes.String
+	default:
+		panic(fmt.Sprintf("unexpected arrow type: %v", tp))
+	}
 }
