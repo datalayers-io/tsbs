@@ -16,21 +16,11 @@ tsbs_generate_data \
     --file ./datalayers_cpu-only.data
 
 ## Load data
-tsbs_load load \
-    --data-source.type="FILE" \
-    --data-source.file.location="./datalayers_cpu-only.data" \
-    --loader.runner.db-name="benchmark" \
-    --loader.runner.db-create-db=true \
-    --loader.runner.db-abort-on-exist=true \
-    --loader.runner.do-load=true \
-    --loader.runner.workers=8 \
-    --loader.runner.hash-workers=true \
-    --loader.runner.flow-control=true \
-    --loader.runner.batch-size=5000 \
-    --loader.runner.seed=42 \
-    --loader.runner.reporting-period=5s \
-    --loader.runner.results-file="./cpu-only-result.json \
-    --loader.db-specific.sql-endpoint="127.0.0.1:8360"
+### Generate load config (Optional if you have a config file)
+tsbs_load config  --data-source="FILE" --target="datalayers"
+
+### Perform loading
+tsbs_load load datalayers --config=./config.yaml
 
 ## Generate queries
 TODO

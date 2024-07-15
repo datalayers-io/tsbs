@@ -29,7 +29,7 @@ func (t *datalayersTarget) Serializer() serialize.PointSerializer {
 }
 
 func (t *datalayersTarget) Benchmark(targetDB string, dataSourceConfig *source.DataSourceConfig, dbSpecificViper *viper.Viper) (targets.Benchmark, error) {
-	var datalayersConfig datalayersConfig
+	var datalayersConfig DatalayersConfig
 	if err := dbSpecificViper.Unmarshal(&datalayersConfig); err != nil {
 		return nil, err
 	}

@@ -1,0 +1,23 @@
+data-source:
+  type: FILE
+  file:
+    location: ./datalayers_cpu-only.data
+loader:
+  db-specific:
+    batch-size: "5000"
+    sql-endpoint: 127.0.0.1:8360
+  runner:
+    batch-size: "5000"
+    channel-capacity: "0"
+    db-name: benchmark
+    do-abort-on-exist: true
+    do-create-db: true
+    do-load: true
+    flow-control: true
+    hash-workers: true
+    insert-intervals: ""
+    limit: "0"
+    reporting-period: 5s
+    seed: 42
+    workers: "8"
+  target: datalayers
