@@ -16,9 +16,7 @@ func NewTarget() targets.ImplementedTarget {
 }
 
 func (t *datalayersTarget) TargetSpecificFlags(flagPrefix string, flagSet *pflag.FlagSet) {
-	// TODO(niebayes): add datalayer specific flags if necessary.
-	// flagSet.String(flagPrefix+"url", "http://localhost:9000/", "QuestDB REST end point")
-	// flagSet.String(flagPrefix+"ilp-bind-to", "127.0.0.1:9009", "QuestDB influx line protocol TCP ip:port")
+	flagSet.String(flagPrefix+"sql-endpoint", "127.0.0.1:8360", "Datalayers' Arrow FlightSql endpoint")
 }
 
 func (t *datalayersTarget) TargetName() string {
@@ -29,6 +27,10 @@ func (t *datalayersTarget) Serializer() serialize.PointSerializer {
 	return &Serializer{}
 }
 
-func (t *datalayersTarget) Benchmark(targetDB string, dataSourceConfig *source.DataSourceConfig, dataSpecificConfig *viper.Viper) (targets.Benchmark, error) {
-	return NewBenchmark(targetDB, dataSourceConfig, dataSpecificConfig)
+func (t *datalayersTarget) Benchmark(targetDB string, dataSourceConfig *source.DataSourceConfig, v *viper.Viper) (targets.Benchmark, error) {
+	var datalayersConfig datalayersConfig
+	if err := v.Unmarshal(&datalayersConfig); err != nil {
+		return nil, err
+	}
+	return NewBenchmark(targetDB, dataSourceConfig, &datalayersConfig)
 }

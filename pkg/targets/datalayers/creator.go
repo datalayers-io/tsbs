@@ -1,6 +1,8 @@
 package datalayers
 
 import (
+	"log"
+
 	datalayers "github.com/timescale/tsbs/pkg/targets/datalayers/client"
 )
 
@@ -18,7 +20,7 @@ func NewDBCreator(client *datalayers.Client) *dBCreator {
 
 // Init should set up any connection or other setup for talking to the DB, but should NOT create any databases
 func (dc *dBCreator) Init() {
-	// TODO(niebayes): execute the `use <database>` statement.
+	// Not implemented.
 }
 
 // DBExists checks if a database with the given name currently exists.
@@ -43,7 +45,9 @@ func (dc *dBCreator) RemoveOldDB(dbName string) error {
 //
 // Close cleans up any database connections. Only needed by the DBCreatorCloser interface.
 func (dc *dBCreator) Close() {
-	// Not implemented.
+	if err := dc.client.Close(); err != nil {
+		log.Fatalf("failed to close the db creator. error: %v", err)
+	}
 }
 
 // DBCreatorPost is a DBCreator that also needs to do some initialization after the

@@ -8,6 +8,7 @@ require (
 	github.com/HdrHistogram/hdrhistogram-go v1.0.0
 	github.com/SiriDB/go-siridb-connector v0.0.0-20190110105621-86b34c44c921
 	github.com/andreyvit/diff v0.0.0-20170406064948-c7f18ee00883
+	github.com/apache/arrow/go/v16 v16.1.0
 	github.com/aws/aws-sdk-go v1.35.13
 	github.com/blagojts/viper v1.6.3-0.20200313094124-068f44cf5e69
 	github.com/globalsign/mgo v0.0.0-20181015135952-eeefdecb41b8
@@ -31,6 +32,7 @@ require (
 	go.uber.org/atomic v1.6.0
 	golang.org/x/net v0.25.0
 	golang.org/x/time v0.5.0
+	google.golang.org/grpc v1.65.0
 	gopkg.in/yaml.v2 v2.3.0
 )
 
@@ -221,7 +223,6 @@ require (
 	github.com/apache/arrow/go/v10 v10.0.1 // indirect
 	github.com/apache/arrow/go/v11 v11.0.0 // indirect
 	github.com/apache/arrow/go/v12 v12.0.1 // indirect
-	github.com/apache/arrow/go/v16 v16.1.0 // indirect
 	github.com/apache/thrift v0.19.0 // indirect
 	github.com/armon/circbuf v0.0.0-20150827004946-bbbad097214e // indirect
 	github.com/armon/consul-api v0.0.0-20180202201655-eb2c6b5be1b6 // indirect
@@ -729,7 +730,6 @@ require (
 	google.golang.org/genproto/googleapis/api v0.0.0-20240528184218-531527333157 // indirect
 	google.golang.org/genproto/googleapis/bytestream v0.0.0-20231212172506-995d672761c0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240528184218-531527333157 // indirect
-	google.golang.org/grpc v1.65.0 // indirect
 	google.golang.org/grpc/cmd/protoc-gen-go-grpc v1.1.0 // indirect
 	google.golang.org/protobuf v1.34.2 // indirect
 	gopkg.in/alecthomas/kingpin.v2 v2.2.6 // indirect
