@@ -3,11 +3,14 @@ package datalayers
 import (
 	"errors"
 
-	"github.com/blagojts/viper"
 	"github.com/timescale/tsbs/pkg/data/source"
 	"github.com/timescale/tsbs/pkg/targets"
 	datalayers "github.com/timescale/tsbs/pkg/targets/datalayers/client"
 )
+
+type datalayersConfig struct {
+	sqlEndpoint string `yaml:"sql-endpoint"`
+}
 
 // Wraps the context used during a benchmark.
 // The point indexer is constructed on the call GetPointIndexer
@@ -20,12 +23,12 @@ type benchmark struct {
 }
 
 // Initializes all context used during the benchmark.
-func NewBenchmark(targetDB string, dataSourceConfig *source.DataSourceConfig, v *viper.Viper) (targets.Benchmark, error) {
+func NewBenchmark(targetDB string, dataSourceConfig *source.DataSourceConfig, datalayersConfig *datalayersConfig) (targets.Benchmark, error) {
 	if dataSourceConfig.Type != source.FileDataSourceType {
 		return nil, errors.New("datalayers only supports file data source")
 	}
 
-	datalayersClient, err := datalayers.NewClient(datalayers.DatalayersServerAddr)
+	datalayersClient, err := datalayers.NewClient(datalayersConfig.sqlEndpoint)
 	if err != nil {
 		return nil, err
 	}

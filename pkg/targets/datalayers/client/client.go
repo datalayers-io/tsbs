@@ -19,12 +19,12 @@ type Client struct {
 }
 
 // Creates a Datalayers client to connect to the given socket address.
-func NewClient(addr string) (*Client, error) {
+func NewClient(sqlEndpoint string) (*Client, error) {
 	// Creates a flight sql client.
 	var grpcDialOpts = []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	}
-	flightSqlClient, err := flightsql.NewClient(addr, nil, nil, grpcDialOpts...)
+	flightSqlClient, err := flightsql.NewClient(sqlEndpoint, nil, nil, grpcDialOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -37,6 +37,10 @@ func NewClient(addr string) (*Client, error) {
 
 	clt := &Client{flightSqlClient, ctx}
 	return clt, nil
+}
+
+func (clt *Client) Close() error {
+	return clt.inner.Close()
 }
 
 // Execute executes the desired query on the server and returns a FlightInfo
