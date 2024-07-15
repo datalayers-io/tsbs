@@ -61,6 +61,7 @@ func (s *Serializer) Serialize(p *data.Point, w io.Writer) error {
 	// Appends data types.
 	if len(dataTypes) > 0 {
 		buf = append(buf, ' ')
+		// TODO(niebayes): maybe support run-length encoding/decoding.
 		compressedDataTypes := strings.Join(dataTypes, ",")
 		buf = serialize.FastFormatAppend(compressedDataTypes, buf)
 	}
