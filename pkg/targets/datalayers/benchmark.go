@@ -8,9 +8,9 @@ import (
 	datalayers "github.com/timescale/tsbs/pkg/targets/datalayers/client"
 )
 
-type datalayersConfig struct {
-	sqlEndpoint string `yaml:"sql-endpoint"`
-	batchSize   uint   `yaml:"batch-size"`
+type DatalayersConfig struct {
+	SqlEndpoint string `yaml:"sql-endpoint" mapstructure:"sql-endpoint"`
+	BatchSize   uint   `yaml:"batch-size" mapstructure:"batch-size"`
 }
 
 // Wraps the context used during a benchmark.
@@ -24,19 +24,19 @@ type benchmark struct {
 }
 
 // Initializes all context used during the benchmark.
-func NewBenchmark(targetDB string, dataSourceConfig *source.DataSourceConfig, datalayersConfig *datalayersConfig) (targets.Benchmark, error) {
+func NewBenchmark(targetDB string, dataSourceConfig *source.DataSourceConfig, datalayersConfig *DatalayersConfig) (targets.Benchmark, error) {
 	if dataSourceConfig.Type != source.FileDataSourceType {
 		return nil, errors.New("datalayers only supports file data source")
 	}
 
-	datalayersClient, err := datalayers.NewClient(datalayersConfig.sqlEndpoint)
+	datalayersClient, err := datalayers.NewClient(datalayersConfig.SqlEndpoint)
 	if err != nil {
 		return nil, err
 	}
 
 	benchmark := benchmark{
 		dataSource:   NewDataSource(dataSourceConfig.File.Location),
-		batchFactory: NewBatchFactory(datalayersConfig.batchSize),
+		batchFactory: NewBatchFactory(datalayersConfig.BatchSize),
 		processor:    NewProcessor(datalayersClient, targetDB),
 		dBCreator:    NewDBCreator(datalayersClient),
 	}
