@@ -22,9 +22,9 @@ type writeContext struct {
 
 func NewWriteContext(client *datalayers.Client, p *point, targetDB string) *writeContext {
 	numFields := len(p.fields) + 1
-	fieldNames := make([]string, numFields)
-	placeholders := make([]string, numFields)
-	arrowFields := make([]arrow.Field, numFields)
+	fieldNames := make([]string, 0, numFields)
+	placeholders := make([]string, 0, numFields)
+	arrowFields := make([]arrow.Field, 0, numFields)
 
 	fieldNames = append(fieldNames, "ts")
 	placeholders = append(placeholders, "?")

@@ -83,7 +83,7 @@ func decodePoint(tokens []string) (point, error) {
 	compressedDataTypes := tokens[len(tokens)-1]
 
 	dataTypes := strings.Split(compressedDataTypes, ",")
-	fields := make([]field, len(dataTypes))
+	fields := make([]field, 0, len(dataTypes))
 	for i, s := range dataTypes {
 		dataType := arrowDataTypeFromString(s)
 
