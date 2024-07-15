@@ -12,18 +12,13 @@ type dBCreator struct {
 	client *datalayers.Client
 }
 
-func NewDBCreator() *dBCreator {
-	return &dBCreator{client: nil}
+func NewDBCreator(client *datalayers.Client) *dBCreator {
+	return &dBCreator{client}
 }
 
 // Init should set up any connection or other setup for talking to the DB, but should NOT create any databases
 func (dc *dBCreator) Init() {
-	addr := "127.0.0.1:8360"
-	client, err := datalayers.NewClient(addr)
-	if err != nil {
-		panic(err)
-	}
-	dc.client = client
+	// TODO(niebayes): execute the `use <database>` statement.
 }
 
 // DBExists checks if a database with the given name currently exists.

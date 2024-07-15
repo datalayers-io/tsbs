@@ -17,6 +17,7 @@ var NULL string = "nil"
 // by Datalayers to serialize simulated data points during data generation.
 type Serializer struct{}
 
+// TODO(niebayes): for each measurement, only the first record contains field keys.
 // The serialized data point conforms to the following format:
 // <measurement> <timestamp> <field name>=<field value> <field name>=<field value> ...
 //

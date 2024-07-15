@@ -10,6 +10,8 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
+var DatalayersServerAddr string = "127.0.0.1:8360"
+
 // A Datalayers client based on an Arrow FlightSql client.
 type Client struct {
 	inner *flightsql.Client
@@ -67,8 +69,28 @@ func (clt *Client) CreateDatabase(dbName string) error {
 
 	// Assumes the server is in the standalone mode.
 	ticket := flightInfo.GetEndpoint()[0].GetTicket()
+	flightReader, err := clt.DoGet(ticket)
+	if err != nil {
+		return err
+	}
 
-	// Ignores the reader since we only care about whether the database was created successfully or not.
-	_, err = clt.DoGet(ticket)
-	return err
+	flightReader.Release()
+	return nil
+}
+
+func (clt *Client) ExecuteInsertPrepare(preparedStatement *flightsql.PreparedStatement) error {
+	flightInfo, err := preparedStatement.Execute(clt.ctx)
+	if err != nil {
+		return err
+	}
+
+	// Assumes the server is in the standalone mode.
+	ticket := flightInfo.GetEndpoint()[0].GetTicket()
+	flightReader, err := clt.DoGet(ticket)
+	if err != nil {
+		return err
+	}
+
+	flightReader.Release()
+	return nil
 }

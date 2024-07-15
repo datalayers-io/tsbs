@@ -6,6 +6,7 @@ import (
 	"github.com/blagojts/viper"
 	"github.com/timescale/tsbs/pkg/data/source"
 	"github.com/timescale/tsbs/pkg/targets"
+	datalayers "github.com/timescale/tsbs/pkg/targets/datalayers/client"
 )
 
 // Wraps the context used during a benchmark.
@@ -23,11 +24,17 @@ func NewBenchmark(targetDB string, dataSourceConfig *source.DataSourceConfig, v 
 	if dataSourceConfig.Type != source.FileDataSourceType {
 		return nil, errors.New("datalayers only supports file data source")
 	}
+
+	datalayersClient, err := datalayers.NewClient(datalayers.DatalayersServerAddr)
+	if err != nil {
+		return nil, err
+	}
+
 	benchmark := benchmark{
 		dataSource:   NewDataSource(dataSourceConfig.File.Location),
 		batchFactory: NewBatchFactory(),
-		processor:    NewProcessor(),
-		dBCreator:    NewDBCreator(),
+		processor:    NewProcessor(datalayersClient),
+		dBCreator:    NewDBCreator(datalayersClient),
 	}
 	return &benchmark, nil
 }
