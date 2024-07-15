@@ -20,7 +20,10 @@ type Serializer struct{}
 
 // TODO(niebayes): for each measurement, only the first record contains field keys.
 // The serialized data point conforms to the following format:
-// <measurement> <timestamp> <field name>=<field value> <field name>=<field value> ...
+// <measurement> <timestamp> <field name>=<field value> <field name>=<field value> ... <compressed data types>
+// where the compressed data conforms to the following format:
+// 1, 2, 3, ...
+// where each integer number corresponds to the integer representation of an arrow data type.
 //
 // All tags will be converted to fields since Datalayers has no concept of tags.
 //
