@@ -32,7 +32,7 @@ func (proc *processor) Init(workerNum int, doLoad, hashWorkers bool) {
 // If doLoad is true, the processor will load the data batch to the Datalayers server.
 // If doLoad is false, no data loading will be performed. Only data parsing and buffering would be performed.
 func (proc *processor) ProcessBatch(b targets.Batch, doLoad bool) (metricCount, rowCount uint64) {
-	processed := make([]string, 0)
+	affected := make([]string, 0)
 
 	batch := b.(*batch)
 	for _, point := range batch.points {
@@ -43,10 +43,10 @@ func (proc *processor) ProcessBatch(b targets.Batch, doLoad bool) (metricCount, 
 		writeContext := proc.writeContexts[point.measurement]
 		writeContext.append(&point)
 
-		processed = append(processed, point.measurement)
+		affected = append(affected, point.measurement)
 	}
 
-	for _, measurement := range processed {
+	for _, measurement := range affected {
 		writeContext := proc.writeContexts[measurement]
 		record := writeContext.flush()
 

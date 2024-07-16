@@ -3,6 +3,7 @@ package datalayers
 import (
 	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/apache/arrow/go/v16/arrow"
 	"github.com/apache/arrow/go/v16/arrow/array"
@@ -24,7 +25,7 @@ func NewWriteContext(client *datalayers.Client, p *point, dbName string) *writeC
 
 	arrowFields = append(arrowFields, arrow.Field{
 		Name:     "ts",
-		Type:     arrow.FixedWidthTypes.Time64ns,
+		Type:     arrow.FixedWidthTypes.Timestamp_ns,
 		Nullable: false,
 	})
 
@@ -60,7 +61,7 @@ func NewWriteContext(client *datalayers.Client, p *point, dbName string) *writeC
 
 func (ctx *writeContext) append(p *point) {
 	arrowRecordBuilder := ctx.arrowRecordBuilder
-	appendFieldValue(arrowRecordBuilder.Field(0), arrow.FixedWidthTypes.Time64ns, p.timestamp)
+	appendFieldValue(arrowRecordBuilder.Field(0), arrow.FixedWidthTypes.Timestamp_ns, p.timestamp)
 	for i, field := range p.fields {
 		fieldBuilder := arrowRecordBuilder.Field(i + 1)
 		if field.value == NULL {
@@ -117,9 +118,13 @@ func appendFieldValue(fieldBuilder array.Builder, fieldType arrow.DataType, fiel
 		builder := fieldBuilder.(*array.StringBuilder)
 		v := fieldValue
 		builder.Append(v)
-	case arrow.FixedWidthTypes.Time64ns:
+	case arrow.FixedWidthTypes.Timestamp_ns:
 		builder := fieldBuilder.(*array.TimestampBuilder)
-		v, err := arrow.TimestampFromString(fieldValue, arrow.Nanosecond)
+		ts, err := strconv.ParseInt(fieldValue, 10, 64)
+		if err != nil {
+			panic(fmt.Sprintf("failed to convert a string to int64. error: %v", err))
+		}
+		v, err := arrow.TimestampFromTime(time.Unix(0, ts).UTC(), arrow.Nanosecond)
 		if err != nil {
 			panic(fmt.Sprintf("failed to convert a string to timestamp. error: %v", err))
 		}
