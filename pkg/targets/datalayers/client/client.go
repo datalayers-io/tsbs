@@ -52,16 +52,22 @@ func (clt *Client) CreateDatabase(dbName string) error {
 func (clt *Client) CreateTable(dbName string, tableName string, ifNotExists bool, arrowFields []arrow.Field, partitionByFields []string, partitionNum uint) error {
 	createClause := "CREATE TABLE "
 	if ifNotExists {
-		createClause += "[IF NOT EXISTS] "
+		createClause += "IF NOT EXISTS "
 	}
 	createClause += fmt.Sprintf("%v.%v", dbName, tableName)
 
 	columnDefs := make([]string, 0, len(arrowFields))
 	for _, field := range arrowFields {
 		colDef := fmt.Sprintf("%v %v", field.Name, arrowDataTypeToDatalayersDataType(field.Type))
+		// Adds a column constraint if it's the timestamp field.
+		if field.Name == "ts" {
+			colDef += " NOT NULL DEFAULT CURRENT_TIMESTAMP"
+		}
 		columnDefs = append(columnDefs, colDef)
 	}
-	columnDefClause := fmt.Sprintf("(\n%v)", strings.Join(columnDefs, ",\n"))
+	// Adds the timestamp constraint.
+	columnDefs = append(columnDefs, "timestamp key(ts)")
+	columnDefClause := fmt.Sprintf("(\n%v\n)", strings.Join(columnDefs, ",\n"))
 
 	partitionByClause := fmt.Sprintf("PARTITION BY HASH(%v) PARTITIONS %v", strings.Join(partitionByFields, ","), partitionNum)
 	engineClause := "ENGINE=TimeSeries"
