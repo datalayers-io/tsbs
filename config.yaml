@@ -5,7 +5,7 @@ data-source:
 loader:
   db-specific:
     batch-size: "5000"
-    sql-endpoint: 127.0.0.1:28360
+    sql-endpoint: 127.0.0.1:8360
   runner:
     batch-size: "5000"
     channel-capacity: "0"
