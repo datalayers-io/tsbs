@@ -10,7 +10,7 @@ loader:
     batch-size: "5000"
     channel-capacity: "0"
     db-name: benchmark
-    do-abort-on-exist: true
+    do-abort-on-exist: false
     do-create-db: true
     do-load: true
     flow-control: true

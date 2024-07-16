@@ -3,31 +3,25 @@ package datalayers
 import (
 	"fmt"
 	"strconv"
-	"strings"
 
 	"github.com/apache/arrow/go/v16/arrow"
 	"github.com/apache/arrow/go/v16/arrow/array"
 	"github.com/apache/arrow/go/v16/arrow/flight/flightsql"
 	"github.com/apache/arrow/go/v16/arrow/memory"
-	"github.com/prometheus/common/log"
 	datalayers "github.com/timescale/tsbs/pkg/targets/datalayers/client"
 )
 
 type writeContext struct {
-	arrowFields        []arrow.Field
 	arrowRecordBuilder *array.RecordBuilder
 	// The prepared statement for writing to a table.
 	preparedStatement *flightsql.PreparedStatement
 }
 
-func NewWriteContext(client *datalayers.Client, p *point, targetDB string) *writeContext {
+func NewWriteContext(client *datalayers.Client, p *point, dbName string) *writeContext {
+	tableName := p.measurement
 	numFields := len(p.fields) + 1
-	fieldNames := make([]string, 0, numFields)
-	placeholders := make([]string, 0, numFields)
 	arrowFields := make([]arrow.Field, 0, numFields)
 
-	fieldNames = append(fieldNames, "ts")
-	placeholders = append(placeholders, "?")
 	arrowFields = append(arrowFields, arrow.Field{
 		Name:     "ts",
 		Type:     arrow.FixedWidthTypes.Time64ns,
@@ -35,8 +29,6 @@ func NewWriteContext(client *datalayers.Client, p *point, targetDB string) *writ
 	})
 
 	for _, field := range p.fields {
-		fieldNames = append(fieldNames, field.name)
-		placeholders = append(placeholders, "?")
 		arrowFields = append(arrowFields, arrow.Field{
 			Name:     field.name,
 			Type:     field.dataType,
@@ -44,19 +36,26 @@ func NewWriteContext(client *datalayers.Client, p *point, targetDB string) *writ
 		})
 	}
 
-	preparedQuery := fmt.Sprintf("INSERT INTO %v.%v (%v) VALUES (%v)", targetDB, p.measurement, strings.Join(fieldNames, ","), strings.Join(placeholders, ","))
-	log.Infof("the prepared query for table %v is: %v", p.measurement, preparedQuery)
-
-	preparedStatement, err := client.Prepare(preparedQuery)
-	if err != nil {
-		panic(fmt.Sprintf("failed to create a prepared statement. error: %v", err))
+	// TODO(niebayes): support providing partition by fields and partition num through config file.
+	// Creates table.
+	partitionByFields := []string{"hostname", "region", "datacenter", "rack"}
+	partitionNum := uint(64)
+	if err := client.CreateTable(dbName, tableName, true, arrowFields, partitionByFields, partitionNum); err != nil {
+		panic(fmt.Sprintf("failed to create table %v. error: %v", tableName, err))
 	}
 
+	// Initializes a insert prepared statement.
+	preparedStatement, err := client.InsertPrepare(dbName, tableName, arrowFields)
+	if err != nil {
+		panic(fmt.Sprintf("failed to initialize a insert prepared statement for table %v. error: %v", tableName, err))
+	}
+
+	// Initializes an arrow record builder.
 	arrowSchema := arrow.NewSchema(arrowFields, nil)
 	// FIXME(niebayes): is it good to assign an allocator to each record builder?
 	arrowRecordBuilder := array.NewRecordBuilder(memory.NewGoAllocator(), arrowSchema)
 
-	return &writeContext{arrowFields, arrowRecordBuilder, preparedStatement}
+	return &writeContext{arrowRecordBuilder, preparedStatement}
 }
 
 func (ctx *writeContext) append(p *point) {

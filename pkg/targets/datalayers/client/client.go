@@ -3,14 +3,15 @@ package datalayers
 import (
 	"context"
 	"fmt"
+	"strings"
 
+	"github.com/apache/arrow/go/v16/arrow"
 	"github.com/apache/arrow/go/v16/arrow/flight"
 	"github.com/apache/arrow/go/v16/arrow/flight/flightsql"
+	"github.com/prometheus/common/log"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
-
-var DatalayersServerAddr string = "127.0.0.1:8360"
 
 // A Datalayers client based on an Arrow FlightSql client.
 type Client struct {
@@ -43,43 +44,50 @@ func (clt *Client) Close() error {
 	return clt.inner.Close()
 }
 
-// Execute executes the desired query on the server and returns a FlightInfo
-// object describing where to retrieve the results.
-func (clt *Client) Execute(query string) (*flight.FlightInfo, error) {
-	return clt.inner.Execute(clt.ctx, query)
-}
-
-// DoGet uses the provided flight ticket to request the stream of data.
-// It returns a recordbatch reader to stream the results. Release
-// should be called on the reader when done.
-func (clt *Client) DoGet(ticket *flight.Ticket) (*flight.Reader, error) {
-	return clt.inner.DoGet(clt.ctx, ticket)
-}
-
-// Prepare creates a PreparedStatement object for the specified query.
-// The resulting PreparedStatement object should be Closed when no longer
-// needed. It will maintain a reference to this Client for use to execute
-// and use the specified allocator for any allocations it needs to perform.
-func (clt *Client) Prepare(query string) (*flightsql.PreparedStatement, error) {
-	return clt.inner.Prepare(clt.ctx, query)
-}
-
 func (clt *Client) CreateDatabase(dbName string) error {
-	create_database_stmt := fmt.Sprintf("create database %s", dbName)
-	flightInfo, err := clt.Execute(create_database_stmt)
-	if err != nil {
-		return err
+	createDatabaseStmt := fmt.Sprintf("create database %s", dbName)
+	return clt.GeneralExecute(createDatabaseStmt)
+}
+
+func (clt *Client) CreateTable(dbName string, tableName string, ifNotExists bool, arrowFields []arrow.Field, partitionByFields []string, partitionNum uint) error {
+	createClause := "CREATE TABLE "
+	if ifNotExists {
+		createClause += "[IF NOT EXISTS] "
+	}
+	createClause += fmt.Sprintf("%v.%v", dbName, tableName)
+
+	columnDefs := make([]string, 0, len(arrowFields))
+	for _, field := range arrowFields {
+		colDef := fmt.Sprintf("%v %v", field.Name, arrowDataTypeToDatalayersDataType(field.Type))
+		columnDefs = append(columnDefs, colDef)
+	}
+	columnDefClause := fmt.Sprintf("(\n%v)", strings.Join(columnDefs, ",\n"))
+
+	partitionByClause := fmt.Sprintf("PARTITION BY HASH(%v) PARTITIONS %v", strings.Join(partitionByFields, ","), partitionNum)
+	engineClause := "ENGINE=TimeSeries"
+
+	allClauses := []string{createClause, columnDefClause, partitionByClause, engineClause}
+	createTableStmt := strings.Join(allClauses, "\n")
+
+	log.Infof("The create table statement for table %v is:\n%v", tableName, createTableStmt)
+
+	return clt.GeneralExecute(createTableStmt)
+}
+
+func (clt *Client) InsertPrepare(dbName string, tableName string, arrowFields []arrow.Field) (*flightsql.PreparedStatement, error) {
+	fieldNames := make([]string, 0, len(arrowFields))
+	placeHolders := make([]string, 0, len(arrowFields))
+
+	for _, field := range arrowFields {
+		fieldNames = append(fieldNames, field.Name)
+		placeHolders = append(placeHolders, "?")
 	}
 
-	// Assumes the server is in the standalone mode.
-	ticket := flightInfo.GetEndpoint()[0].GetTicket()
-	flightReader, err := clt.DoGet(ticket)
-	if err != nil {
-		return err
-	}
+	insertPrepareStmt := fmt.Sprintf("INSERT INTO %v.%v (%v) VALUES (%v)", dbName, tableName, strings.Join(fieldNames, ","), strings.Join(placeHolders, ","))
 
-	flightReader.Release()
-	return nil
+	log.Infof("The prepared statement for inserting into table %v is:\n%v", tableName, insertPrepareStmt)
+
+	return clt.inner.Prepare(clt.ctx, insertPrepareStmt)
 }
 
 func (clt *Client) ExecuteInsertPrepare(preparedStatement *flightsql.PreparedStatement) error {
@@ -87,14 +95,48 @@ func (clt *Client) ExecuteInsertPrepare(preparedStatement *flightsql.PreparedSta
 	if err != nil {
 		return err
 	}
+	return clt.doGetWithFlightInfo(flightInfo)
+}
 
+func (clt *Client) GeneralExecute(query string) error {
+	flightInfo, err := clt.inner.Execute(clt.ctx, query)
+	if err != nil {
+		return err
+	}
+	return clt.doGetWithFlightInfo(flightInfo)
+}
+
+func (clt *Client) doGetWithFlightInfo(flightInfo *flight.FlightInfo) error {
 	// Assumes the server is in the standalone mode.
 	ticket := flightInfo.GetEndpoint()[0].GetTicket()
-	flightReader, err := clt.DoGet(ticket)
+	flightReader, err := clt.inner.DoGet(clt.ctx, ticket)
 	if err != nil {
 		return err
 	}
 
 	flightReader.Release()
 	return nil
+}
+
+func arrowDataTypeToDatalayersDataType(arrowDataType arrow.DataType) string {
+	switch arrowDataType {
+	case arrow.FixedWidthTypes.Boolean:
+		return "BOOLEAN"
+	case arrow.PrimitiveTypes.Int32:
+		return "INT32"
+	case arrow.PrimitiveTypes.Int64:
+		return "INT64"
+	case arrow.PrimitiveTypes.Float32:
+		return "REAL"
+	case arrow.PrimitiveTypes.Float64:
+		return "DOUBLE"
+	case arrow.BinaryTypes.Binary:
+		return "BINARY"
+	case arrow.BinaryTypes.String:
+		return "STRING"
+	case arrow.FixedWidthTypes.Timestamp_ns:
+		return "TIMESTAMP(9)"
+	default:
+		panic(fmt.Sprintf("unexpected arrow data type %v", arrowDataType))
+	}
 }
