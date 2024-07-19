@@ -13,6 +13,9 @@ GOFMT=$(GOCMD) fmt
 # all: generators loaders runners
 all: loaders 
 
+test_prepare: test_prepare
+	go build -gcflags "all=-N -l" ./cmd/tsbs_test_prepare
+
 generators: tsbs_generate_data \
 			tsbs_generate_queries
 

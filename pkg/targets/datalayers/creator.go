@@ -36,12 +36,17 @@ func (dc *dBCreator) DBExists(dbName string) bool {
 // CreateDB creates a database with the given name.
 func (dc *dBCreator) CreateDB(dbName string) error {
 	err := dc.client.CreateDatabase(dbName)
-	errStr := err.Error()
-	// Suppresses the "Database already exist" error.
-	if strings.Contains(errStr, fmt.Sprintf("Database `%v` already exist", dbName)) {
-		return nil
+	if err != nil {
+		errStr := err.Error()
+		// Suppresses the "Database already exist" error.
+		if strings.Contains(errStr, fmt.Sprintf("Database `%v` already exist", dbName)) {
+			return nil
+		}
+		return err
 	}
-	return err
+	// TODO(niebayes): maybe not call UseDatabase at here.
+	dc.client.UseDatabase(dbName)
+	return nil
 }
 
 // RemoveOldDB removes an existing database with the given name.
