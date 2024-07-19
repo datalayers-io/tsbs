@@ -3,6 +3,7 @@ package datalayers
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/prometheus/common/log"
 	"github.com/timescale/tsbs/pkg/targets"
@@ -13,13 +14,35 @@ import (
 type processor struct {
 	targetDB string
 	client   *datalayers.Client
-	// key: measurement table, aka. table name.
+	// key: measurement name, aka. table name.
 	// value: the context for writing data batch to the table.
 	writeContexts map[string]*writeContext
+	// The number of partitions for each table.
+	partitionNum uint
+	// key: measurement name, aka. table name.
+	// value: the name of fields to be used as the partition by fields.
+	partitionByFields map[string][]string
 }
 
-func NewProcessor(client *datalayers.Client, targetDB string) targets.Processor {
-	return &processor{targetDB: targetDB, client: client, writeContexts: make(map[string]*writeContext)}
+func NewProcessor(client *datalayers.Client, targetDB string, partitionNum uint, rawParitionByFields []string) targets.Processor {
+	partitionByFields := make(map[string][]string)
+	for _, raw := range rawParitionByFields {
+		parts := strings.Split(raw, ":")
+		if len(parts) != 2 {
+			panic("expect the encoded partition by fields for each table to be `<table name>:<field name>,<field name>...`")
+		}
+		tableName := strings.TrimSpace(parts[0])
+		rawFields := strings.Split(strings.TrimSpace(parts[1]), ",")
+
+		fields := make([]string, 0)
+		for _, rawField := range rawFields {
+			fields = append(fields, strings.TrimSpace(rawField))
+		}
+
+		partitionByFields[tableName] = fields
+	}
+
+	return &processor{targetDB: targetDB, client: client, writeContexts: make(map[string]*writeContext), partitionNum: partitionNum, partitionByFields: make(map[string][]string)}
 }
 
 // Init does per-worker setup needed before receiving data
@@ -39,7 +62,7 @@ func (proc *processor) ProcessBatch(b targets.Batch, doLoad bool) (metricCount, 
 	for _, point := range batch.points {
 		_, exist := proc.writeContexts[point.measurement]
 		if !exist {
-			proc.writeContexts[point.measurement] = NewWriteContext(proc.client, &point, proc.targetDB)
+			proc.writeContexts[point.measurement] = NewWriteContext(proc.client, &point, proc.targetDB, proc.partitionNum, proc.partitionByFields[point.measurement])
 		}
 		writeContext := proc.writeContexts[point.measurement]
 		writeContext.append(&point)
@@ -56,7 +79,7 @@ func (proc *processor) ProcessBatch(b targets.Batch, doLoad bool) (metricCount, 
 		rowCount += uint64(record.NumRows())
 
 		if doLoad {
-			log.Infof("Loading %v points from measurement: %v", numPoints, measurement)
+			log.Infof("Loading %v points for measurement: %v", numPoints, measurement)
 
 			writeContext.preparedStatement.SetParameters(record)
 			err := proc.client.ExecuteInsertPrepare(writeContext.preparedStatement)

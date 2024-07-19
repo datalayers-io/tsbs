@@ -18,7 +18,7 @@ type writeContext struct {
 	preparedStatement *flightsql.PreparedStatement
 }
 
-func NewWriteContext(client *datalayers.Client, p *point, dbName string) *writeContext {
+func NewWriteContext(client *datalayers.Client, p *point, dbName string, partitionNum uint, partitionByFields []string) *writeContext {
 	tableName := p.measurement
 	numFields := len(p.fields) + 1
 	arrowFields := make([]arrow.Field, 0, numFields)
@@ -37,10 +37,7 @@ func NewWriteContext(client *datalayers.Client, p *point, dbName string) *writeC
 		})
 	}
 
-	// TODO(niebayes): support providing partition by fields and partition num through config file.
 	// Creates table.
-	partitionByFields := []string{"hostname", "region", "datacenter", "rack"}
-	partitionNum := uint(64)
 	if err := client.CreateTable(dbName, tableName, true, arrowFields, partitionByFields, partitionNum); err != nil {
 		panic(fmt.Sprintf("failed to create table %v. error: %v", tableName, err))
 	}
