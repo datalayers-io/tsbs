@@ -18,6 +18,7 @@ func init() {
 		panic(err)
 	}
 	rootCmd.AddCommand(loadCmd)
+
 	configCmd := initConfigCMD()
 	rootCmd.AddCommand(configCmd)
 }

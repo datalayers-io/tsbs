@@ -3,9 +3,10 @@ package serialize
 import (
 	"bytes"
 	"fmt"
-	"github.com/timescale/tsbs/pkg/data"
 	"testing"
 	"time"
+
+	"github.com/timescale/tsbs/pkg/data"
 )
 
 var (
@@ -55,6 +56,11 @@ func generateTestPoint(name []byte, tagKeys [][]byte, tagVals []interface{}, ts 
 	return p
 }
 
+func TestPointEmpty() *data.Point {
+	return generateTestPoint(TestMeasurement, [][]byte{}, []interface{}{}, &TestNow,
+		[][]byte{}, []interface{}{})
+}
+
 func TestPointDefault() *data.Point {
 	return generateTestPoint(TestMeasurement, TestTagKeys, TestTagVals, &TestNow,
 		[][]byte{TestColFloat}, []interface{}{TestFloat})
@@ -76,6 +82,11 @@ func TestPointNoTags() *data.Point {
 		[][]byte{TestColFloat}, []interface{}{TestFloat})
 }
 
+func TestPointNoFields() *data.Point {
+	return generateTestPoint(TestMeasurement, [][]byte{[]byte("hostname")}, []interface{}{"host_0"}, &TestNow,
+		[][]byte{}, []interface{}{})
+}
+
 func TestPointWithNilTag() *data.Point {
 	return generateTestPoint(TestMeasurement, [][]byte{[]byte("hostname")}, []interface{}{nil}, &TestNow,
 		[][]byte{TestColFloat}, []interface{}{TestFloat})
@@ -84,6 +95,11 @@ func TestPointWithNilTag() *data.Point {
 func TestPointWithNilField() *data.Point {
 	return generateTestPoint(TestMeasurement, [][]byte{}, []interface{}{}, &TestNow,
 		[][]byte{TestColInt64, TestColFloat}, []interface{}{nil, TestFloat})
+}
+
+func TestPointWithNilTagAndNilField() *data.Point {
+	return generateTestPoint(TestMeasurement, [][]byte{[]byte("hostname")}, []interface{}{nil}, &TestNow,
+		[][]byte{TestColInt64}, []interface{}{nil})
 }
 
 type SerializeCase struct {

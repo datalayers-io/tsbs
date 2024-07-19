@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+
 	"github.com/blagojts/viper"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
