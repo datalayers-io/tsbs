@@ -33,11 +33,17 @@ test:
 coverage:
 	$(GOTEST) -race -coverprofile=coverage.txt -covermode=atomic ./...
 
-# TODO(niebayes): remove gcflags to build in release mode.
+# Release mode.
 tsbs_%: $(wildcard ./cmd/$@/*.go)
 	$(GOGET) ./cmd/$@
-	$(GOBUILD) -gcflags "all=-N -l" -o bin/$@ ./cmd/$@
+	$(GOBUILD) -o bin/$@ ./cmd/$@
 	$(GOINSTALL) ./cmd/$@
+
+# Debug mode.
+# tsbs_%: $(wildcard ./cmd/$@/*.go)
+# 	$(GOGET) ./cmd/$@
+# 	$(GOBUILD) -gcflags "all=-N -l" -o bin/$@ ./cmd/$@
+# 	$(GOINSTALL) ./cmd/$@
 
 checkfmt:
 	@echo 'Checking gofmt';\
