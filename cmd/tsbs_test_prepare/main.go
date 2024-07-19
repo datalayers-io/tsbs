@@ -74,7 +74,7 @@ func run() error {
 	tableOptions := "ENGINE=TimeSeries"
 
 	createTableStmt := strings.Join([]string{createClause, columnDefClause, partitionByClause, tableOptions}, "\n")
-	log.Infof("create table stmt:\n%v", createTableStmt)
+	// log.Infof("create table stmt:\n%v", createTableStmt)
 
 	execute(client, ctx, createTableStmt)
 
@@ -133,7 +133,8 @@ func run() error {
 			if err != nil {
 				panic(err)
 			}
-			log.Infof("affected rows = %v", affectedRows)
+			_ = affectedRows
+			// log.Infof("affected rows = %v", affectedRows)
 		} else {
 			// 2. Use the Execute method to execute the prepared statement as a general query.
 			// The server returns a flight into through which the client could fetch the execution result by calling DoGet.
@@ -148,7 +149,7 @@ func run() error {
 			}
 			flightReader.Release()
 
-			log.Infof("inserted a record")
+			// log.Infof("inserted a record")
 		}
 
 		record.Release()

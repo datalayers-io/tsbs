@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/prometheus/common/log"
+	// "github.com/prometheus/common/log"
 	"github.com/timescale/tsbs/pkg/targets"
 	datalayers "github.com/timescale/tsbs/pkg/targets/datalayers/client"
 )
@@ -83,7 +83,8 @@ func (proc *processor) ProcessBatch(b targets.Batch, doLoad bool) (metricCount, 
 		rowCount += uint64(record.NumRows())
 
 		if doLoad {
-			log.Infof("Loading %v points for measurement: %v", numPoints, measurement)
+			_ = numPoints
+			// log.Infof("Loading %v points for measurement: %v", numPoints, measurement)
 
 			writeContext.preparedStatement.SetParameters(record)
 			err := proc.client.ExecuteInsertPrepare(writeContext.preparedStatement)
@@ -91,13 +92,13 @@ func (proc *processor) ProcessBatch(b targets.Batch, doLoad bool) (metricCount, 
 				panic(fmt.Sprintf("failed to execute a insert prepared statement. error: %v", err))
 			}
 
-			log.Infof("Inserted %v rows to table %v", record.NumRows(), measurement)
+			// log.Infof("Inserted %v rows to table %v", record.NumRows(), measurement)
 		}
 
 		record.Release()
 	}
 
-	log.Infof("processed. metricCount = %v, rowCount = %v", metricCount, rowCount)
+	// log.Infof("processed. metricCount = %v, rowCount = %v", metricCount, rowCount)
 
 	return metricCount, rowCount
 }
