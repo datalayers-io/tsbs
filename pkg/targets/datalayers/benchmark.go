@@ -9,8 +9,10 @@ import (
 )
 
 type DatalayersConfig struct {
-	SqlEndpoint string `yaml:"sql-endpoint" mapstructure:"sql-endpoint"`
-	BatchSize   uint   `yaml:"batch-size" mapstructure:"batch-size"`
+	SqlEndpoint        string   `yaml:"sql-endpoint" mapstructure:"sql-endpoint"`
+	BatchSize          uint     `yaml:"batch-size" mapstructure:"batch-size"`
+	PartitionNum       uint     `yaml:"partition-num" mapstructure:"partition-num"`
+	PartitionByColumns []string `yaml:"partition-by-columns" mapstructure:"partition-by-columns"`
 }
 
 // Wraps the context used during a benchmark.
@@ -37,7 +39,7 @@ func NewBenchmark(targetDB string, dataSourceConfig *source.DataSourceConfig, da
 	benchmark := benchmark{
 		dataSource:   NewDataSource(dataSourceConfig.File.Location),
 		batchFactory: NewBatchFactory(datalayersConfig.BatchSize),
-		processor:    NewProcessor(datalayersClient, targetDB),
+		processor:    NewProcessor(datalayersClient, targetDB, datalayersConfig.PartitionNum, datalayersConfig.PartitionByColumns),
 		dBCreator:    NewDBCreator(datalayersClient),
 	}
 	return &benchmark, nil

@@ -4,8 +4,12 @@ data-source:
     location: ./datalayers_cpu-only.data
 loader:
   db-specific:
-    batch-size: "5000"
     sql-endpoint: 127.0.0.1:8360
+    batch-size: "5000"
+    partition-num: 16
+    # TODO(niebayes): modify for the devops use case.
+    partition-by-fields:
+        - "cpu:hostname,region,datacenter,rack"
   runner:
     batch-size: "5000"
     channel-capacity: "0"

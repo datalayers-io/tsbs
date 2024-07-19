@@ -161,6 +161,7 @@ func NewBatchFactory(capacity uint) targets.BatchFactory {
 }
 
 // New returns a new Batch to add Points to
+// TODO(niebayes): seems it's possible to pre-allocate a set of batches and reuse them during benchmarking.
 func (bf *batchFactory) New() targets.Batch {
 	return &batch{points: make([]point, 0, bf.capacity)}
 }
