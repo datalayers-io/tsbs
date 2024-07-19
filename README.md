@@ -94,7 +94,7 @@ loader:
 
 关于 `loader.db-specific` 中的参数的含义：
 - sql-endpoint：Datalayers 服务端 Arrow FlightSql 服务的监听端口。
-- batch-size：在写入链路上，存在一个用于攒批的 buffer。它的 max size 由 `loader.runner.batch-size` 来决定。但是创建这个 buffer 时，TSBS 默认创建一个 capacity = 0 的 buffer。另一方面，我们在创建 buffer 时，由于 TSBS 框架的限制，我们无法获取到 `loader.runner.batch-size` 这个参数。因此我们加入了这个参数，使得创建 buffer 时所设置的 capacity 与 max size 等同。以减少动态 re-allocate 带来的开销。你应该将 `loader.db-specific.batch-size` 与 `loader.runner.batch-size` 设置为一致的值。
+- batch-size：在写入链路上，存在一个用于攒批的 buffer。它的 max size 由 `loader.runner.batch-size` 来决定。但是创建这个 buffer 时，TSBS 默认创建一个 capacity = 0 的 buffer。另一方面，我们在创建 buffer 时，由于 TSBS 框架的限制，我们无法获取到 `loader.runner.batch-size` 这个参数。因此我们加入了这个参数，使得创建 buffer 时所设置的 capacity 与 max size 等同，以减少动态 re-allocate 带来的开销。你应该将 `loader.db-specific.batch-size` 与 `loader.runner.batch-size` 设置为一致的值。
 - partition-num：每个表的 partition 数量。
 - partition-by-fields：为每个表指定建表时使用的 `PARTITION BY` 列。这个参数接受一个 array of strings。每个 string 符合这样的格式：`<table name>:<field name>,<field name>,...`。 `table_name` 表示为哪个表指定 partition by 列，冒号后面的，是用逗号隔开的各个列的列名。
 
@@ -124,7 +124,7 @@ loaded 1944000 rows in 39.884sec with 8 workers (mean rate 48741.86 rows/sec)
 - `time`：打印这条日志的时间。
 - `per. metric/s`：在本次统计间隔内，平均每秒写入的 metrics 的量。
 - `metric total`：累计写入的 metrics 的总量。
-- `overall metric/s`：从压测开始，平均每秒写入的 metirics 的量。
+- `overall metric/s`：从压测开始，平均每秒写入的 metrics 的量。
 - `per. row/s`：在本次统计间隔内，平均每秒写入的行数。
 - `row total`：累计写入的总行数。
 - `overall row/s`：从压测开始，平均每秒写入的行数。
