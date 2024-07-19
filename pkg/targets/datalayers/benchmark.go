@@ -3,6 +3,7 @@ package datalayers
 import (
 	"errors"
 
+	"github.com/prometheus/common/log"
 	"github.com/timescale/tsbs/pkg/data/source"
 	"github.com/timescale/tsbs/pkg/targets"
 	datalayers "github.com/timescale/tsbs/pkg/targets/datalayers/client"
@@ -30,6 +31,8 @@ func NewBenchmark(targetDB string, dataSourceConfig *source.DataSourceConfig, da
 	if dataSourceConfig.Type != source.FileDataSourceType {
 		return nil, errors.New("datalayers only supports file data source")
 	}
+
+	log.Infof("read datalayers config: %v", dataSourceConfig)
 
 	datalayersClient, err := datalayers.NewClient(datalayersConfig.SqlEndpoint)
 	if err != nil {

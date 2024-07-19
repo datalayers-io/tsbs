@@ -1,15 +1,22 @@
 data-source:
   type: FILE
   file:
-    location: ./datalayers_cpu-only.data
+    location: ./datalayers_devops.data
 loader:
   db-specific:
     sql-endpoint: 127.0.0.1:8360
     batch-size: "5000"
     partition-num: 16
-    # TODO(niebayes): modify for the devops use case.
     partition-by-fields:
         - "cpu:hostname,region,datacenter,rack"
+        - "diskio:hostname,region,datacenter,rack"
+        - "disk:hostname,region,datacenter,rack"
+        - "kernel:hostname,region,datacenter,rack"
+        - "mem:hostname,region,datacenter,rack"
+        - "net:hostname,region,datacenter,rack"
+        - "nginx:hostname,region,datacenter,rack"
+        - "postgresl:hostname,region,datacenter,rack"
+        - "redis:hostname,region,datacenter,rack"
   runner:
     batch-size: "5000"
     channel-capacity: "0"

@@ -39,6 +39,11 @@ func NewProcessor(client *datalayers.Client, targetDB string, partitionNum uint,
 			fields = append(fields, strings.TrimSpace(rawField))
 		}
 
+		if len(fields) == 0 {
+			panic("the number of partition by fields must be greater than 0")
+		}
+		log.Infof("table: %v, partition by fields: %v", tableName, fields)
+
 		partitionByFields[tableName] = fields
 	}
 
