@@ -10,20 +10,20 @@ import (
 )
 
 type DatalayersConfig struct {
-	SqlEndpoint        string   `yaml:"sql-endpoint" mapstructure:"sql-endpoint"`
-	BatchSize          uint     `yaml:"batch-size" mapstructure:"batch-size"`
-	PartitionNum       uint     `yaml:"partition-num" mapstructure:"partition-num"`
-	PartitionByColumns []string `yaml:"partition-by-columns" mapstructure:"partition-by-columns"`
+	SqlEndpoint       string   `yaml:"sql-endpoint" mapstructure:"sql-endpoint"`
+	BatchSize         uint     `yaml:"batch-size" mapstructure:"batch-size"`
+	PartitionNum      uint     `yaml:"partition-num" mapstructure:"partition-num"`
+	PartitionByFields []string `yaml:"partition-by-fields" mapstructure:"partition-by-fields"`
 }
 
 // Wraps the context used during a benchmark.
 // The point indexer is constructed on the call GetPointIndexer
 // since the maxPartitions is not available for NewBenchmark.
 type benchmark struct {
-	dataSource   targets.DataSource
-	batchFactory targets.BatchFactory
-	processor    targets.Processor
-	dBCreator    targets.DBCreator
+	targetDB         string
+	dataSourceConfig *source.DataSourceConfig
+	datalayersClient *datalayers.Client
+	datalayersConfig *DatalayersConfig
 }
 
 // Initializes all context used during the benchmark.
@@ -32,30 +32,27 @@ func NewBenchmark(targetDB string, dataSourceConfig *source.DataSourceConfig, da
 		return nil, errors.New("datalayers only supports file data source")
 	}
 
-	log.Infof("read datalayers config: %v", dataSourceConfig)
+	log.Infof("Read datalayers config:")
+	log.Infof("datalayers.sql-endpoint: %v", datalayersConfig.SqlEndpoint)
+	log.Infof("datalayers.batch-size: %v", datalayersConfig.BatchSize)
+	log.Infof("datalayers.partition-num: %v", datalayersConfig.PartitionNum)
+	log.Infof("datalayers.partition-by-fields: %v", datalayersConfig.PartitionByFields)
 
 	datalayersClient, err := datalayers.NewClient(datalayersConfig.SqlEndpoint)
 	if err != nil {
 		return nil, err
 	}
-
-	benchmark := benchmark{
-		dataSource:   NewDataSource(dataSourceConfig.File.Location),
-		batchFactory: NewBatchFactory(datalayersConfig.BatchSize),
-		processor:    NewProcessor(datalayersClient, targetDB, datalayersConfig.PartitionNum, datalayersConfig.PartitionByColumns),
-		dBCreator:    NewDBCreator(datalayersClient),
-	}
-	return &benchmark, nil
+	return &benchmark{targetDB, dataSourceConfig, datalayersClient, datalayersConfig}, nil
 }
 
 // GetDataSource returns the DataSource to use for this Benchmark
 func (b *benchmark) GetDataSource() targets.DataSource {
-	return b.dataSource
+	return NewDataSource(b.dataSourceConfig.File.Location)
 }
 
 // GetBatchFactory returns the BatchFactory to use for this Benchmark
 func (b *benchmark) GetBatchFactory() targets.BatchFactory {
-	return b.batchFactory
+	return NewBatchFactory(b.datalayersConfig.BatchSize)
 }
 
 // GetPointIndexer returns the PointIndexer to use for this Benchmark
@@ -65,10 +62,10 @@ func (b *benchmark) GetPointIndexer(maxPartitions uint) targets.PointIndexer {
 
 // GetProcessor returns the Processor to use for this Benchmark
 func (b *benchmark) GetProcessor() targets.Processor {
-	return b.processor
+	return NewProcessor(b.datalayersClient, b.targetDB, b.datalayersConfig.PartitionNum, b.datalayersConfig.PartitionByFields)
 }
 
 // GetDBCreator returns the DBCreator to use for this Benchmark
 func (b *benchmark) GetDBCreator() targets.DBCreator {
-	return b.dBCreator
+	return NewDBCreator(b.datalayersClient)
 }

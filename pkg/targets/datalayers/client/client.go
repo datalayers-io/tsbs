@@ -80,7 +80,7 @@ func (clt *Client) CreateTable(dbName string, tableName string, ifNotExists bool
 	allClauses := []string{createClause, columnDefClause, partitionByClause, engineClause}
 	createTableStmt := strings.Join(allClauses, "\n")
 
-	log.Infof("The create table statement for table %v is:\n%v", tableName, createTableStmt)
+	log.Debugf("The create table statement for table %v is:\n%v", tableName, createTableStmt)
 
 	return clt.GeneralExecute(createTableStmt)
 }
@@ -96,7 +96,7 @@ func (clt *Client) InsertPrepare(dbName string, tableName string, arrowFields []
 
 	insertPrepareStmt := fmt.Sprintf("INSERT INTO %v.%v (%v) VALUES (%v)", dbName, tableName, strings.Join(fieldNames, ","), strings.Join(placeHolders, ","))
 
-	log.Infof("The prepared statement for inserting into table %v is:\n%v", tableName, insertPrepareStmt)
+	log.Debugf("The prepared statement for inserting into table %v is:\n%v", tableName, insertPrepareStmt)
 
 	return clt.inner.Prepare(clt.ctx, insertPrepareStmt)
 }
