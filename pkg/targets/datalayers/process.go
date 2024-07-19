@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/prometheus/common/log"
 	"github.com/timescale/tsbs/pkg/targets"
 	datalayers "github.com/timescale/tsbs/pkg/targets/datalayers/client"
 )
@@ -32,7 +33,7 @@ func (proc *processor) Init(workerNum int, doLoad, hashWorkers bool) {
 // If doLoad is true, the processor will load the data batch to the Datalayers server.
 // If doLoad is false, no data loading will be performed. Only data parsing and buffering would be performed.
 func (proc *processor) ProcessBatch(b targets.Batch, doLoad bool) (metricCount, rowCount uint64) {
-	affected := make([]string, 0)
+	affected := make(map[string]uint)
 
 	batch := b.(*batch)
 	for _, point := range batch.points {
@@ -43,27 +44,33 @@ func (proc *processor) ProcessBatch(b targets.Batch, doLoad bool) (metricCount, 
 		writeContext := proc.writeContexts[point.measurement]
 		writeContext.append(&point)
 
-		affected = append(affected, point.measurement)
+		affected[point.measurement] += 1
 	}
 
-	for _, measurement := range affected {
+	for measurement, numPoints := range affected {
 		writeContext := proc.writeContexts[measurement]
 		record := writeContext.flush()
 
 		// Datalayers does not differentiate between tags and fields, all columns are regarded as metrics.
-		metricCount += uint64(record.NumCols())
+		metricCount += uint64(record.NumCols() * record.NumRows())
 		rowCount += uint64(record.NumRows())
 
 		if doLoad {
+			log.Infof("Loading %v points from measurement: %v", numPoints, measurement)
+
 			writeContext.preparedStatement.SetParameters(record)
 			err := proc.client.ExecuteInsertPrepare(writeContext.preparedStatement)
 			if err != nil {
 				panic(fmt.Sprintf("failed to execute a insert prepared statement. error: %v", err))
 			}
+
+			log.Infof("Inserted %v rows to table %v", record.NumRows(), measurement)
 		}
 
 		record.Release()
 	}
+
+	log.Infof("processed. metricCount = %v, rowCount = %v", metricCount, rowCount)
 
 	return metricCount, rowCount
 }

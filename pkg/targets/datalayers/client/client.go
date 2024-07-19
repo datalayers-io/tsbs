@@ -11,6 +11,7 @@ import (
 	"github.com/prometheus/common/log"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
 )
 
 // A Datalayers client based on an Arrow FlightSql client.
@@ -47,6 +48,10 @@ func (clt *Client) Close() error {
 func (clt *Client) CreateDatabase(dbName string) error {
 	createDatabaseStmt := fmt.Sprintf("create database %s", dbName)
 	return clt.GeneralExecute(createDatabaseStmt)
+}
+
+func (clt *Client) UseDatabase(dbName string) {
+	clt.ctx = metadata.AppendToOutgoingContext(clt.ctx, "database", dbName)
 }
 
 func (clt *Client) CreateTable(dbName string, tableName string, ifNotExists bool, arrowFields []arrow.Field, partitionByFields []string, partitionNum uint) error {
@@ -102,6 +107,12 @@ func (clt *Client) ExecuteInsertPrepare(preparedStatement *flightsql.PreparedSta
 		return err
 	}
 	return clt.doGetWithFlightInfo(flightInfo)
+	// affectedRows, err := preparedStatement.ExecuteUpdate(clt.ctx)
+	// if err != nil {
+	// 	return err
+	// }
+	// log.Infof("Insert prepared affected rows: %v", affectedRows)
+	// return nil
 }
 
 func (clt *Client) GeneralExecute(query string) error {
