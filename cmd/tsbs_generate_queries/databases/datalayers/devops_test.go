@@ -1,7 +1,6 @@
 package datalayers
 
 import (
-	"fmt"
 	"math/rand"
 	"strings"
 	"testing"
@@ -12,63 +11,28 @@ import (
 	"github.com/timescale/tsbs/pkg/query"
 )
 
+// TODO(niebayes): modify unit tests for datalayers.
+
 func TestDevopsGetHostWhereWithHostnames(t *testing.T) {
 	cases := []struct {
 		desc      string
 		hostnames []string
-		useJSON   bool
-		useTags   bool
 		want      string
 	}{
 		{
-			desc:      "single host - no json or tags",
+			desc:      "single host",
 			hostnames: []string{"foo1"},
-			useJSON:   false,
-			useTags:   false,
 			want:      "hostname IN ('foo1')",
 		},
 		{
-			desc:      "multi host - no json or tags",
+			desc:      "multi host",
 			hostnames: []string{"foo1", "foo2"},
-			useJSON:   false,
-			useTags:   false,
 			want:      "hostname IN ('foo1','foo2')",
-		},
-		{
-			desc:      "single host - w/ json",
-			hostnames: []string{"foo1"},
-			useJSON:   true,
-			useTags:   false,
-			want:      "tags_id IN (SELECT id FROM tags WHERE tagset @> '{\"hostname\": \"foo1\"}')",
-		},
-		{
-			desc:      "multi host - w/ json",
-			hostnames: []string{"foo1", "foo2"},
-			useJSON:   true,
-			useTags:   false,
-			want:      "tags_id IN (SELECT id FROM tags WHERE tagset @> '{\"hostname\": \"foo1\"}' OR tagset @> '{\"hostname\": \"foo2\"}')",
-		},
-		{
-			desc:      "single host - w/ tags",
-			hostnames: []string{"foo1"},
-			useJSON:   false,
-			useTags:   true,
-			want:      "tags_id IN (SELECT id FROM tags WHERE hostname IN ('foo1'))",
-		},
-		{
-			desc:      "multi host - w/ tags",
-			hostnames: []string{"foo1", "foo2"},
-			useJSON:   false,
-			useTags:   true,
-			want:      "tags_id IN (SELECT id FROM tags WHERE hostname IN ('foo1','foo2'))",
 		},
 	}
 
 	for _, c := range cases {
-		b := BaseGenerator{
-			UseJSON: c.useJSON,
-			UseTags: c.useTags,
-		}
+		b := BaseGenerator{}
 		dq, err := b.NewDevops(time.Now(), time.Now(), 10)
 		if err != nil {
 			t.Fatalf("Error while creating devops generator")
@@ -115,27 +79,6 @@ func TestDevopsGetHostWhereString(t *testing.T) {
 	}
 }
 
-func TestDevopsGetTimeBucket(t *testing.T) {
-	b := BaseGenerator{}
-	dq, err := b.NewDevops(time.Now(), time.Now(), 10)
-	if err != nil {
-		t.Fatalf("Error while creating devops generator")
-	}
-	d := dq.(*Devops)
-
-	seconds := 60
-	want := fmt.Sprintf(nonTimeBucketFmt, seconds, seconds)
-	if got := d.getTimeBucket(seconds); got != want {
-		t.Errorf("incorrect non time bucket format: got %s want %s", got, want)
-	}
-
-	d.UseTimeBucket = true
-	want = fmt.Sprintf(timeBucketFmt, seconds)
-	if got := d.getTimeBucket(seconds); got != want {
-		t.Errorf("incorrect time bucket format: got %s want %s", got, want)
-	}
-}
-
 func TestDevopsGetSelectClausesAggMetrics(t *testing.T) {
 	cases := []struct {
 		desc    string
@@ -147,19 +90,19 @@ func TestDevopsGetSelectClausesAggMetrics(t *testing.T) {
 			desc:    "single metric - max",
 			agg:     "max",
 			metrics: []string{"foo"},
-			want:    "max(foo) as max_foo",
+			want:    "max(foo)",
 		},
 		{
 			desc:    "multiple metric - max",
 			agg:     "max",
 			metrics: []string{"foo", "bar"},
-			want:    "max(foo) as max_foo,max(bar) as max_bar",
+			want:    "max(foo), max(bar)",
 		},
 		{
 			desc:    "multiple metric - avg",
 			agg:     "avg",
 			metrics: []string{"foo", "bar"},
-			want:    "avg(foo) as avg_foo,avg(bar) as avg_bar",
+			want:    "avg(foo), avg(bar)",
 		},
 	}
 
@@ -171,7 +114,7 @@ func TestDevopsGetSelectClausesAggMetrics(t *testing.T) {
 		}
 		d := dq.(*Devops)
 
-		if got := strings.Join(d.getSelectClausesAggMetrics(c.agg, c.metrics), ","); got != c.want {
+		if got := strings.Join(d.getSelectClausesAggMetrics(c.agg, c.metrics), ", "); got != c.want {
 			t.Errorf("%s: incorrect output: got %s want %s", c.desc, got, c.want)
 		}
 	}
@@ -190,9 +133,7 @@ func TestDevopsGroupByTime(t *testing.T) {
 	rand.Seed(123) // Setting seed for testing purposes.
 	s := time.Unix(0, 0)
 	e := s.Add(time.Hour)
-	b := BaseGenerator{
-		UseTimeBucket: true,
-	}
+	b := BaseGenerator{}
 	dq, err := b.NewDevops(s, e, 10)
 	if err != nil {
 		t.Fatalf("Error while creating devops generator")
@@ -223,9 +164,7 @@ func TestGroupByOrderByLimit(t *testing.T) {
 	rand.Seed(123) // Setting seed for testing purposes.
 	s := time.Unix(0, 0)
 	e := s.Add(2 * time.Hour)
-	b := BaseGenerator{
-		UseTimeBucket: true,
-	}
+	b := BaseGenerator{}
 	dq, err := b.NewDevops(s, e, 10)
 	if err != nil {
 		t.Fatalf("Error while creating devops generator")
@@ -263,7 +202,7 @@ func TestGroupByTimeAndPrimaryTag(t *testing.T) {
         )
         SELECT hour, hostname, mean_usage_user
         FROM cpu_avg
-        
+
         ORDER BY hour, hostname`,
 		},
 		{
@@ -334,11 +273,7 @@ func TestGroupByTimeAndPrimaryTag(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.desc, func(t *testing.T) {
-			b := BaseGenerator{
-				UseJSON:       c.useJSON,
-				UseTags:       c.useTags,
-				UseTimeBucket: true,
-			}
+			b := BaseGenerator{}
 			dq, err := b.NewDevops(s, e, 10)
 			if err != nil {
 				t.Fatalf("Error while creating devops generator")
@@ -369,9 +304,7 @@ func TestMaxAllCPU(t *testing.T) {
 	s := time.Unix(0, 0)
 	e := s.Add(devops.MaxAllDuration).Add(time.Hour)
 
-	b := BaseGenerator{
-		UseTimeBucket: true,
-	}
+	b := BaseGenerator{}
 	dq, err := b.NewDevops(s, e, 10)
 	if err != nil {
 		t.Fatalf("Error while creating devops generator")
@@ -434,10 +367,7 @@ func TestLastPointPerHost(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.desc, func(t *testing.T) {
-			b := BaseGenerator{
-				UseJSON: c.useJSON,
-				UseTags: c.useTags,
-			}
+			b := BaseGenerator{}
 			dq, err := b.NewDevops(time.Now(), time.Now(), 10)
 			if err != nil {
 				t.Fatalf("Error while creating devops generator")
