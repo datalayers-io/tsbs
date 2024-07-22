@@ -192,7 +192,7 @@ func (d *Devops) getHostWhereWithHostnames(hostnames []string) string {
 	}
 	// using the OR logic here is an anti-pattern for the query planner. Doing
 	// the IN will get translated to an ANY query and do better
-	return fmt.Sprintf("hostname IN (%s)", strings.Join(hostnameClauses, ","))
+	return fmt.Sprintf("hostname IN (%s)", strings.Join(hostnameClauses, ", "))
 }
 
 // getHostWhereString gets multiple random hostnames and creates a WHERE SQL statement for these hostnames.
