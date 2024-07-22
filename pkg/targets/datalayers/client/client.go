@@ -135,6 +135,14 @@ func (clt *Client) doGetWithFlightInfo(flightInfo *flight.FlightInfo) error {
 	return nil
 }
 
+func (clt *Client) SelectPrepare(dbName string, tableName string, arrowFields []arrow.Field) (*flightsql.PreparedStatement, error) {
+	return nil, nil
+}
+
+func (clt *Client) ExecuteSelectPrepare(preparedStatement *flightsql.PreparedStatement) error {
+	return nil
+}
+
 func arrowDataTypeToDatalayersDataType(arrowDataType arrow.DataType) string {
 	switch arrowDataType {
 	case arrow.FixedWidthTypes.Boolean:
