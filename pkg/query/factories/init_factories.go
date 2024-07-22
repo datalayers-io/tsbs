@@ -1,6 +1,7 @@
 package factories
 
 import (
+	"github.com/timescale/tsbs/cmd/tsbs_generate_queries/databases/datalayers"
 	"github.com/timescale/tsbs/cmd/tsbs_generate_queries/databases/influx"
 	"github.com/timescale/tsbs/cmd/tsbs_generate_queries/databases/timescaledb"
 	"github.com/timescale/tsbs/pkg/query/config"
@@ -15,6 +16,6 @@ func InitQueryFactories(config *config.QueryGeneratorConfig) map[string]interfac
 		UseTags:       config.TimescaleUseTags,
 		UseTimeBucket: config.TimescaleUseTimeBucket,
 	}
-	// TODO(niebayes): add entries for Datalayers.
+	factories[constants.FormatDatalayers] = &datalayers.BaseGenerator{}
 	return factories
 }
