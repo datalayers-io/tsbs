@@ -150,18 +150,10 @@ func (clt *Client) ExecuteQuery(query string) error {
 	}
 	for flightReader.Next() {
 		record := flightReader.Record()
-		log.Infof("Read a record. schema: %v, numRows: %v, numCols: %v", record.Schema().String(), record.NumRows(), record.NumCols())
+		log.Infof("Read a record. numRows: %v, numCols: %v", record.NumRows(), record.NumCols())
 	}
 	flightReader.Release()
 
-	return nil
-}
-
-func (clt *Client) SelectPrepare(dbName string, tableName string, arrowFields []arrow.Field) (*flightsql.PreparedStatement, error) {
-	return nil, nil
-}
-
-func (clt *Client) ExecuteSelectPrepare(preparedStatement *flightsql.PreparedStatement) error {
 	return nil
 }
 
