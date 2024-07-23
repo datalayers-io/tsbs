@@ -135,6 +135,28 @@ func (clt *Client) doGetWithFlightInfo(flightInfo *flight.FlightInfo) error {
 	return nil
 }
 
+// TODO(niebayes): support pretty print response.
+func (clt *Client) ExecuteQuery(query string) error {
+	log.Infof("Execute Query: %v", query)
+
+	flightInfo, err := clt.inner.Execute(clt.ctx, query)
+	if err != nil {
+		panic(err)
+	}
+
+	flightReader, err := clt.inner.DoGet(clt.ctx, flightInfo.GetEndpoint()[0].GetTicket())
+	if err != nil {
+		panic(err)
+	}
+	for flightReader.Next() {
+		record := flightReader.Record()
+		log.Infof("Read a record. schema: %v, numRows: %v, numCols: %v", record.Schema().String(), record.NumRows(), record.NumCols())
+	}
+	flightReader.Release()
+
+	return nil
+}
+
 func (clt *Client) SelectPrepare(dbName string, tableName string, arrowFields []arrow.Field) (*flightsql.PreparedStatement, error) {
 	return nil, nil
 }
