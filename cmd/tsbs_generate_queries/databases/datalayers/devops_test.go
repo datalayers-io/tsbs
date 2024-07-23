@@ -6,12 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/andreyvit/diff"
 	"github.com/timescale/tsbs/cmd/tsbs_generate_queries/uses/devops"
 	"github.com/timescale/tsbs/pkg/query"
 )
-
-// TODO(niebayes): modify unit tests for datalayers.
 
 func TestDevopsGetHostWhereWithHostnames(t *testing.T) {
 	cases := []struct {
@@ -27,7 +24,7 @@ func TestDevopsGetHostWhereWithHostnames(t *testing.T) {
 		{
 			desc:      "multi host",
 			hostnames: []string{"foo1", "foo2"},
-			want:      "hostname IN ('foo1','foo2')",
+			want:      "hostname IN ('foo1', 'foo2')",
 		},
 	}
 
@@ -56,11 +53,11 @@ func TestDevopsGetHostWhereString(t *testing.T) {
 		},
 		{
 			nHosts: 2,
-			want:   "hostname IN ('host_5','host_9')",
+			want:   "hostname IN ('host_5', 'host_9')",
 		},
 		{
 			nHosts: 5,
-			want:   "hostname IN ('host_5','host_9','host_3','host_1','host_7')",
+			want:   "hostname IN ('host_5', 'host_9', 'host_3', 'host_1', 'host_7')",
 		},
 	}
 
@@ -121,14 +118,15 @@ func TestDevopsGetSelectClausesAggMetrics(t *testing.T) {
 }
 
 func TestDevopsGroupByTime(t *testing.T) {
-	expectedHumanLabel := "TimescaleDB 1 cpu metric(s), random    1 hosts, random 1s by 1m"
-	expectedHumanDesc := "TimescaleDB 1 cpu metric(s), random    1 hosts, random 1s by 1m: 1970-01-01T00:05:58Z"
-	expectedHypertable := "cpu"
-	expectedSQLQuery := `SELECT time_bucket('60 seconds', time) AS minute,
-        max(usage_user) as max_usage_user
+	expectedHumanLabel := "Datalayers 1 cpu metric(s), random    1 hosts, random 1s by 1m"
+	expectedHumanDesc := "Datalayers 1 cpu metric(s), random    1 hosts, random 1s by 1m: 1970-01-01T00:05:58Z"
+	expectedSQLQuery := `SELECT date_trunc('minute', ts) AS minute, 
+        max(usage_user)
         FROM cpu
-        WHERE hostname IN ('host_9') AND time >= '1970-01-01 00:05:58.646325 +0000' AND time < '1970-01-01 00:05:59.646325 +0000'
-        GROUP BY minute ORDER BY minute ASC`
+        WHERE hostname IN ('host_9') 
+		AND ts >= '1970-01-01T00:05:58Z' AND ts < '1970-01-01T00:05:59Z'
+        GROUP BY minute 
+		ORDER BY minute ASC`
 
 	rand.Seed(123) // Setting seed for testing purposes.
 	s := time.Unix(0, 0)
@@ -147,19 +145,19 @@ func TestDevopsGroupByTime(t *testing.T) {
 	q := d.GenerateEmptyQuery()
 	d.GroupByTime(q, nHosts, metrics, duration)
 
-	verifyQuery(t, q, expectedHumanLabel, expectedHumanDesc, expectedHypertable, expectedSQLQuery)
+	verifyQuery(t, q, expectedHumanLabel, expectedHumanDesc, expectedSQLQuery)
 }
 
 func TestGroupByOrderByLimit(t *testing.T) {
-	expectedHumanLabel := "TimescaleDB max cpu over last 5 min-intervals (random end)"
-	expectedHumanDesc := "TimescaleDB max cpu over last 5 min-intervals (random end): 1970-01-01T01:16:22Z"
-	expectedHypertable := "cpu"
-	expectedSQLQuery := `SELECT time_bucket('60 seconds', time) AS minute, max(usage_user)
-        FROM cpu
-        WHERE time < '1970-01-01 01:16:22.646325 +0000'
-        GROUP BY minute
-        ORDER BY minute DESC
-        LIMIT 5`
+	expectedHumanLabel := "Datalayers max cpu over last 5 min-intervals (random end)"
+	expectedHumanDesc := "Datalayers max cpu over last 5 min-intervals (random end): 1970-01-01T01:16:22Z"
+	expectedSQLQuery := `SELECT date_trunc('minute', ts) AS minute, 
+		max(usage_user) 
+		FROM cpu 
+		WHERE ts < '1970-01-01T01:16:22Z' 
+		GROUP BY minute 
+		ORDER BY minute DESC 
+		LIMIT 5`
 
 	rand.Seed(123) // Setting seed for testing purposes.
 	s := time.Unix(0, 0)
@@ -174,96 +172,18 @@ func TestGroupByOrderByLimit(t *testing.T) {
 	q := d.GenerateEmptyQuery()
 	d.GroupByOrderByLimit(q)
 
-	verifyQuery(t, q, expectedHumanLabel, expectedHumanDesc, expectedHypertable, expectedSQLQuery)
+	verifyQuery(t, q, expectedHumanLabel, expectedHumanDesc, expectedSQLQuery)
 }
 
 func TestGroupByTimeAndPrimaryTag(t *testing.T) {
-	cases := []struct {
-		desc               string
-		useJSON            bool
-		useTags            bool
-		expectedHumanLabel string
-		expectedHumanDesc  string
-		expectedHypertable string
-		expectedSQLQuery   string
-	}{
-		{
-			desc:               "no JSON or tags",
-			expectedHumanLabel: "TimescaleDB mean of 1 metrics, all hosts, random 12h0m0s by 1h",
-			expectedHumanDesc:  "TimescaleDB mean of 1 metrics, all hosts, random 12h0m0s by 1h: 1970-01-01T00:16:22Z",
-			expectedHypertable: "cpu",
-			expectedSQLQuery: `
-        WITH cpu_avg AS (
-          SELECT time_bucket('3600 seconds', time) as hour, hostname,
-          avg(usage_user) as mean_usage_user
-          FROM cpu
-          WHERE time >= '1970-01-01 00:16:22.646325 +0000' AND time < '1970-01-01 12:16:22.646325 +0000'
-          GROUP BY 1, 2
-        )
-        SELECT hour, hostname, mean_usage_user
-        FROM cpu_avg
-
-        ORDER BY hour, hostname`,
-		},
-		{
-			desc:               "use JSON",
-			useJSON:            true,
-			expectedHumanLabel: "TimescaleDB mean of 1 metrics, all hosts, random 12h0m0s by 1h",
-			expectedHumanDesc:  "TimescaleDB mean of 1 metrics, all hosts, random 12h0m0s by 1h: 1970-01-01T00:54:10Z",
-			expectedHypertable: "cpu",
-			expectedSQLQuery: `
-        WITH cpu_avg AS (
-          SELECT time_bucket('3600 seconds', time) as hour, tags_id,
-          avg(usage_user) as mean_usage_user
-          FROM cpu
-          WHERE time >= '1970-01-01 00:54:10.138978 +0000' AND time < '1970-01-01 12:54:10.138978 +0000'
-          GROUP BY 1, 2
-        )
-        SELECT hour, tags->>'hostname', mean_usage_user
-        FROM cpu_avg
-        JOIN tags ON cpu_avg.tags_id = tags.id
-        ORDER BY hour, tags->>'hostname'`,
-		},
-		{
-			desc:               "use tags",
-			useTags:            true,
-			expectedHumanLabel: "TimescaleDB mean of 1 metrics, all hosts, random 12h0m0s by 1h",
-			expectedHumanDesc:  "TimescaleDB mean of 1 metrics, all hosts, random 12h0m0s by 1h: 1970-01-01T00:47:30Z",
-			expectedHypertable: "cpu",
-			expectedSQLQuery: `
-        WITH cpu_avg AS (
-          SELECT time_bucket('3600 seconds', time) as hour, tags_id,
-          avg(usage_user) as mean_usage_user
-          FROM cpu
-          WHERE time >= '1970-01-01 00:47:30.894865 +0000' AND time < '1970-01-01 12:47:30.894865 +0000'
-          GROUP BY 1, 2
-        )
-        SELECT hour, tags.hostname, mean_usage_user
-        FROM cpu_avg
-        JOIN tags ON cpu_avg.tags_id = tags.id
-        ORDER BY hour, tags.hostname`,
-		},
-		{
-			desc:               "enable JSON and tags but use JSON",
-			useJSON:            true,
-			useTags:            true,
-			expectedHumanLabel: "TimescaleDB mean of 1 metrics, all hosts, random 12h0m0s by 1h",
-			expectedHumanDesc:  "TimescaleDB mean of 1 metrics, all hosts, random 12h0m0s by 1h: 1970-01-01T00:37:12Z",
-			expectedHypertable: "cpu",
-			expectedSQLQuery: `
-        WITH cpu_avg AS (
-          SELECT time_bucket('3600 seconds', time) as hour, tags_id,
-          avg(usage_user) as mean_usage_user
-          FROM cpu
-          WHERE time >= '1970-01-01 00:37:12.342805 +0000' AND time < '1970-01-01 12:37:12.342805 +0000'
-          GROUP BY 1, 2
-        )
-        SELECT hour, tags->>'hostname', mean_usage_user
-        FROM cpu_avg
-        JOIN tags ON cpu_avg.tags_id = tags.id
-        ORDER BY hour, tags->>'hostname'`,
-		},
-	}
+	expectedHumanLabel := "Datalayers mean of 1 metrics, all hosts, random 12h0m0s by 1h"
+	expectedHumanDesc := "Datalayers mean of 1 metrics, all hosts, random 12h0m0s by 1h: 1970-01-01T00:16:22Z"
+	expectedSQLQuery := `SELECT date_trunc('hour', ts) AS hour, 
+		avg(usage_user) 
+		FROM cpu 
+		WHERE ts >= '1970-01-01T00:16:22Z' AND ts < '1970-01-01T12:16:22Z' 
+		GROUP BY hour, hostname 
+		ORDER BY hour`
 
 	rand.Seed(123) // Setting seed for testing purposes.
 	s := time.Unix(0, 0)
@@ -271,35 +191,39 @@ func TestGroupByTimeAndPrimaryTag(t *testing.T) {
 
 	numMetrics := 1
 
-	for _, c := range cases {
-		t.Run(c.desc, func(t *testing.T) {
-			b := BaseGenerator{}
-			dq, err := b.NewDevops(s, e, 10)
-			if err != nil {
-				t.Fatalf("Error while creating devops generator")
-			}
-			d := dq.(*Devops)
-
-			q := d.GenerateEmptyQuery()
-			d.GroupByTimeAndPrimaryTag(q, numMetrics)
-
-			verifyQuery(t, q, c.expectedHumanLabel, c.expectedHumanDesc, c.expectedHypertable, c.expectedSQLQuery)
-		})
+	b := BaseGenerator{}
+	dq, err := b.NewDevops(s, e, 10)
+	if err != nil {
+		t.Fatalf("Error while creating devops generator")
 	}
+	d := dq.(*Devops)
+
+	q := d.GenerateEmptyQuery()
+	d.GroupByTimeAndPrimaryTag(q, numMetrics)
+
+	verifyQuery(t, q, expectedHumanLabel, expectedHumanDesc, expectedSQLQuery)
 }
 
 func TestMaxAllCPU(t *testing.T) {
-	expectedHumanLabel := "TimescaleDB max of all CPU metrics, random    1 hosts, random 8h0m0s by 1h"
-	expectedHumanDesc := "TimescaleDB max of all CPU metrics, random    1 hosts, random 8h0m0s by 1h: 1970-01-01T00:16:22Z"
-	expectedHypertable := "cpu"
-	expectedSQLQuery := `SELECT time_bucket('3600 seconds', time) AS hour,
-        max(usage_user) as max_usage_user, max(usage_system) as max_usage_system, max(usage_idle) as max_usage_idle, ` +
-		"max(usage_nice) as max_usage_nice, max(usage_iowait) as max_usage_iowait, max(usage_irq) as max_usage_irq, " +
-		"max(usage_softirq) as max_usage_softirq, max(usage_steal) as max_usage_steal, max(usage_guest) as max_usage_guest, " +
-		`max(usage_guest_nice) as max_usage_guest_nice
-        FROM cpu
-        WHERE hostname IN ('host_9') AND time >= '1970-01-01 00:16:22.646325 +0000' AND time < '1970-01-01 08:16:22.646325 +0000'
-        GROUP BY hour ORDER BY hour`
+	expectedHumanLabel := "Datalayers max of all CPU metrics, random    1 hosts, random 8h0m0s by 1h"
+	expectedHumanDesc := "Datalayers max of all CPU metrics, random    1 hosts, random 8h0m0s by 1h: 1970-01-01T00:16:22Z"
+	expectedSQLQuery := `SELECT date_trunc('hour', ts) AS hour, 
+        max(usage_user), 
+		max(usage_system), 
+		max(usage_idle), 
+		max(usage_nice), 
+		max(usage_iowait), 
+		max(usage_irq), 
+		max(usage_softirq), 
+		max(usage_steal), 
+		max(usage_guest), 
+		max(usage_guest_nice) 
+        FROM cpu 
+        WHERE hostname IN ('host_9') 
+		AND ts >= '1970-01-01T00:16:22Z' AND ts < '1970-01-01T08:16:22Z' 
+        GROUP BY hour 
+		ORDER BY hour`
+
 	rand.Seed(123) // Setting seed for testing purposes.
 	s := time.Unix(0, 0)
 	e := s.Add(devops.MaxAllDuration).Add(time.Hour)
@@ -313,72 +237,26 @@ func TestMaxAllCPU(t *testing.T) {
 
 	q := d.GenerateEmptyQuery()
 	d.MaxAllCPU(q, 1, devops.MaxAllDuration)
-	verifyQuery(t, q, expectedHumanLabel, expectedHumanDesc, expectedHypertable, expectedSQLQuery)
+	verifyQuery(t, q, expectedHumanLabel, expectedHumanDesc, expectedSQLQuery)
 }
 
 func TestLastPointPerHost(t *testing.T) {
-	cases := []struct {
-		desc               string
-		useJSON            bool
-		useTags            bool
-		expectedHumanLabel string
-		expectedHumanDesc  string
-		expectedHypertable string
-		expectedSQLQuery   string
-	}{
-		{
-			desc:               "no JSON or tags",
-			expectedHumanLabel: "TimescaleDB last row per host",
-			expectedHumanDesc:  "TimescaleDB last row per host",
-			expectedHypertable: "cpu",
-			expectedSQLQuery:   "SELECT DISTINCT ON (hostname) * FROM cpu ORDER BY hostname, time DESC",
-		},
-		{
-			desc:               "use JSON",
-			useJSON:            true,
-			expectedHumanLabel: "TimescaleDB last row per host",
-			expectedHumanDesc:  "TimescaleDB last row per host",
-			expectedHypertable: "cpu",
-			expectedSQLQuery: "SELECT DISTINCT ON (t.tagset->>'hostname') * FROM tags t INNER JOIN LATERAL(SELECT * " +
-				"FROM cpu c WHERE c.tags_id = t.id ORDER BY time DESC LIMIT 1) AS b ON true ORDER BY t.tagset->>'hostname', b.time DESC",
-		},
-		{
-			desc:               "use tags",
-			useTags:            true,
-			expectedHumanLabel: "TimescaleDB last row per host",
-			expectedHumanDesc:  "TimescaleDB last row per host",
-			expectedHypertable: "cpu",
-			expectedSQLQuery: "SELECT DISTINCT ON (t.hostname) * FROM tags t INNER JOIN LATERAL(SELECT * FROM cpu c " +
-				"WHERE c.tags_id = t.id ORDER BY time DESC LIMIT 1) AS b ON true ORDER BY t.hostname, b.time DESC",
-		},
-		{
-			desc:               "enable JSON and tags but use tags",
-			useJSON:            true,
-			useTags:            true,
-			expectedHumanLabel: "TimescaleDB last row per host",
-			expectedHumanDesc:  "TimescaleDB last row per host",
-			expectedHypertable: "cpu",
-			expectedSQLQuery: "SELECT DISTINCT ON (t.hostname) * FROM tags t INNER JOIN LATERAL(SELECT * FROM cpu c " +
-				"WHERE c.tags_id = t.id ORDER BY time DESC LIMIT 1) AS b ON true ORDER BY t.hostname, b.time DESC",
-		},
-	}
+	expectedHumanLabel := "Datalayers last row per host"
+	expectedHumanDesc := "Datalayers last row per host"
+	expectedSQLQuery := "SELECT * FROM cpu GROUP BY hostname ORDER BY ts DESC LIMIT 1"
 
 	rand.Seed(123) // Setting seed for testing purposes.
 
-	for _, c := range cases {
-		t.Run(c.desc, func(t *testing.T) {
-			b := BaseGenerator{}
-			dq, err := b.NewDevops(time.Now(), time.Now(), 10)
-			if err != nil {
-				t.Fatalf("Error while creating devops generator")
-			}
-			d := dq.(*Devops)
-
-			q := d.GenerateEmptyQuery()
-			d.LastPointPerHost(q)
-			verifyQuery(t, q, c.expectedHumanLabel, c.expectedHumanDesc, c.expectedHypertable, c.expectedSQLQuery)
-		})
+	b := BaseGenerator{}
+	dq, err := b.NewDevops(time.Now(), time.Now(), 10)
+	if err != nil {
+		t.Fatalf("Error while creating devops generator")
 	}
+	d := dq.(*Devops)
+
+	q := d.GenerateEmptyQuery()
+	d.LastPointPerHost(q)
+	verifyQuery(t, q, expectedHumanLabel, expectedHumanDesc, expectedSQLQuery)
 }
 
 func TestHighCPUForHosts(t *testing.T) {
@@ -393,29 +271,34 @@ func TestHighCPUForHosts(t *testing.T) {
 		{
 			desc:               "zero hosts",
 			nHosts:             0,
-			expectedHumanLabel: "TimescaleDB CPU over threshold, all hosts",
-			expectedHumanDesc:  "TimescaleDB CPU over threshold, all hosts: 1970-01-01T00:16:22Z",
-			expectedHypertable: "cpu",
-			expectedSQLQuery: "SELECT * FROM cpu WHERE usage_user > 90.0 and time >= '1970-01-01 00:16:22.646325 +0000'" +
-				" AND time < '1970-01-01 12:16:22.646325 +0000' ",
+			expectedHumanLabel: "Datalayers CPU over threshold, all hosts",
+			expectedHumanDesc:  "Datalayers CPU over threshold, all hosts: 1970-01-01T00:16:22Z",
+			expectedSQLQuery: `SELECT * 
+				FROM cpu 
+				WHERE usage_user > 90.0 
+				AND ts >= '1970-01-01T00:16:22Z' AND ts < '1970-01-01T12:16:22Z'`,
 		},
 		{
 			desc:               "one host",
 			nHosts:             1,
-			expectedHumanLabel: "TimescaleDB CPU over threshold, 1 host(s)",
-			expectedHumanDesc:  "TimescaleDB CPU over threshold, 1 host(s): 1970-01-01T00:47:30Z",
-			expectedHypertable: "cpu",
-			expectedSQLQuery: "SELECT * FROM cpu WHERE usage_user > 90.0 and time >= '1970-01-01 00:47:30.894865 +0000'" +
-				" AND time < '1970-01-01 12:47:30.894865 +0000' AND hostname IN ('host_9')",
+			expectedHumanLabel: "Datalayers CPU over threshold, 1 host(s)",
+			expectedHumanDesc:  "Datalayers CPU over threshold, 1 host(s): 1970-01-01T00:54:10Z",
+			expectedSQLQuery: `SELECT * 
+				FROM cpu 
+				WHERE usage_user > 90.0 
+				AND ts >= '1970-01-01T00:54:10Z' AND ts < '1970-01-01T12:54:10Z' 
+				AND hostname IN ('host_3')`,
 		},
 		{
 			desc:               "five hosts",
 			nHosts:             5,
-			expectedHumanLabel: "TimescaleDB CPU over threshold, 5 host(s)",
-			expectedHumanDesc:  "TimescaleDB CPU over threshold, 5 host(s): 1970-01-01T00:08:59Z",
-			expectedHypertable: "cpu",
-			expectedSQLQuery: "SELECT * FROM cpu WHERE usage_user > 90.0 and time >= '1970-01-01 00:08:59.080812 +0000'" +
-				" AND time < '1970-01-01 12:08:59.080812 +0000' AND hostname IN ('host_5','host_9','host_1','host_7','host_2')",
+			expectedHumanLabel: "Datalayers CPU over threshold, 5 host(s)",
+			expectedHumanDesc:  "Datalayers CPU over threshold, 5 host(s): 1970-01-01T00:37:12Z",
+			expectedSQLQuery: `SELECT * 
+				FROM cpu 
+				WHERE usage_user > 90.0 
+				AND ts >= '1970-01-01T00:37:12Z' AND ts < '1970-01-01T12:37:12Z' 
+				AND hostname IN ('host_9', 'host_5', 'host_1', 'host_7', 'host_2')`,
 		},
 	}
 
@@ -435,31 +318,50 @@ func TestHighCPUForHosts(t *testing.T) {
 			q := d.GenerateEmptyQuery()
 			d.HighCPUForHosts(q, c.nHosts)
 
-			verifyQuery(t, q, c.expectedHumanLabel, c.expectedHumanDesc, c.expectedHypertable, c.expectedSQLQuery)
+			verifyQuery(t, q, c.expectedHumanLabel, c.expectedHumanDesc, c.expectedSQLQuery)
 		})
 	}
 }
 
-func verifyQuery(t *testing.T, q query.Query, humanLabel, humanDesc, hypertable, sqlQuery string) {
-	tsq, ok := q.(*query.TimescaleDB)
+func verifyQuery(t *testing.T, q query.Query, humanLabel, humanDesc, sqlQuery string) {
+	flightSqlQuery, ok := q.(*query.FlightSqlQuery)
 
 	if !ok {
-		t.Fatal("Filled query is not *query.TimescaleDB type")
+		t.Fatal("Filled query is not *query.Datalayers type")
 	}
 
-	if got := string(tsq.HumanLabel); got != humanLabel {
+	if got := string(flightSqlQuery.HumanLabel); got != humanLabel {
 		t.Errorf("incorrect human label:\ngot\n%s\nwant\n%s", got, humanLabel)
 	}
 
-	if got := string(tsq.HumanDescription); got != humanDesc {
+	if got := string(flightSqlQuery.HumanDescription); got != humanDesc {
 		t.Errorf("incorrect human description:\ngot\n%s\nwant\n%s", got, humanDesc)
 	}
 
-	if got := string(tsq.Hypertable); got != hypertable {
-		t.Errorf("incorrect hypertable:\ngot\n%s\nwant\n%s", got, hypertable)
+	got := tokenize(string(flightSqlQuery.RawQuery))
+	expected := tokenize(sqlQuery)
+	if len(got) != len(expected) {
+		t.Errorf("inconsistent length: got = %v, want = %v", len(got), len(expected))
+		t.Errorf("incorrect SQL query:\ngot\n%s\nwant\n%s", string(flightSqlQuery.RawQuery), sqlQuery)
+		return
 	}
 
-	if got := string(tsq.SqlQuery); got != sqlQuery {
-		t.Errorf("incorrect SQL query:\ndiff\n%s\ngot\n%s\nwant\n%s", diff.CharacterDiff(got, sqlQuery), got, sqlQuery)
+	for i := 0; i < len(got); i++ {
+		if got[i] != expected[i] {
+			t.Errorf("inconsistent token: got = %s, want = %s", got[i], expected[i])
+			t.Errorf("incorrect SQL query:\ngot\n%s\nwant\n%s", string(flightSqlQuery.RawQuery), sqlQuery)
+			return
+		}
 	}
+}
+
+func tokenize(raw string) []string {
+	tokens := make([]string, 0)
+	for _, s := range strings.Split(raw, " ") {
+		token := strings.TrimSpace(s)
+		if len(token) > 0 {
+			tokens = append(tokens, token)
+		}
+	}
+	return tokens
 }

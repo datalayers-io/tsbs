@@ -29,8 +29,8 @@ type Devops struct {
 // WHERE hostname IN ('$HOSTNAME_1',...,'$HOSTNAME_N')
 // AND time >= '$HOUR_START' AND time < '$HOUR_END'
 // GROUP BY minute ORDER BY minute ASC
-func (d *Devops) GroupByTime(q query.Query, nHosts, numMetrics int, timeRange time.Duration) {
-	interval := d.Interval.MustRandWindow(timeRange)
+func (d *Devops) GroupByTime(q query.Query, nHosts, numMetrics int, duration time.Duration) {
+	interval := d.Interval.MustRandWindow(duration)
 	metrics, err := devops.GetCPUMetricsSlice(numMetrics)
 	panicIfErr(err)
 	selectClauses := d.getSelectClausesAggMetrics("max", metrics)
@@ -42,16 +42,16 @@ func (d *Devops) GroupByTime(q query.Query, nHosts, numMetrics int, timeRange ti
         %s
         FROM cpu
         WHERE %s 
-		AND ts >= '%v' AND ts < '%v'
+		AND ts >= '%s' AND ts < '%s'
         GROUP BY minute 
 		ORDER BY minute ASC`,
 		strings.Join(selectClauses, ", "),
 		d.getHostWhereString(nHosts),
-		interval.StartUnixNano(),
-		interval.EndUnixNano(),
+		interval.StartString(),
+		interval.EndString(),
 	)
 
-	humanLabel := fmt.Sprintf("Datalayers %d cpu metric(s), random %4d hosts, random %s by 1m", numMetrics, nHosts, timeRange)
+	humanLabel := fmt.Sprintf("Datalayers %d cpu metric(s), random %4d hosts, random %s by 1m", numMetrics, nHosts, duration)
 	humanDesc := fmt.Sprintf("%s: %s", humanLabel, interval.StartString())
 	d.fillInQuery(q, humanLabel, humanDesc, sql)
 }
@@ -64,13 +64,14 @@ func (d *Devops) GroupByTime(q query.Query, nHosts, numMetrics int, timeRange ti
 func (d *Devops) GroupByOrderByLimit(q query.Query) {
 	interval := d.Interval.MustRandWindow(time.Hour)
 
-	sql := fmt.Sprintf(`SELECT date_trunc('minute', ts) AS minute, max(usage_user)
-        FROM cpu
-        WHERE ts < '%v'
-        GROUP BY minute
-        ORDER BY minute DESC
+	sql := fmt.Sprintf(`SELECT date_trunc('minute', ts) AS minute, 
+		max(usage_user) 
+        FROM cpu 
+        WHERE ts < '%s' 
+        GROUP BY minute 
+        ORDER BY minute DESC 
         LIMIT 5`,
-		interval.EndUnixNano(),
+		interval.EndString(),
 	)
 
 	humanLabel := "Datalayers max cpu over last 5 min-intervals (random end)"
@@ -88,18 +89,18 @@ func (d *Devops) GroupByOrderByLimit(q query.Query) {
 func (d *Devops) GroupByTimeAndPrimaryTag(q query.Query, numMetrics int) {
 	metrics, err := devops.GetCPUMetricsSlice(numMetrics)
 	panicIfErr(err)
-	selectClauses := d.getSelectClausesAggMetrics("mean", metrics)
+	selectClauses := d.getSelectClausesAggMetrics("avg", metrics)
 	interval := d.Interval.MustRandWindow(devops.DoubleGroupByDuration)
 
 	sql := fmt.Sprintf(`SELECT date_trunc('hour', ts) AS hour, 
-		%s,
+		%s 
 		FROM cpu 
-		WHERE ts >= '%v' AND ts < '%v' 
-		GROUP BY hour, hostname
+		WHERE ts >= '%s' AND ts < '%s' 
+		GROUP BY hour, hostname 
 		ORDER BY hour`,
 		strings.Join(selectClauses, ", "),
-		interval.StartUnixNano(),
-		interval.EndUnixNano(),
+		interval.StartString(),
+		interval.EndString(),
 	)
 
 	humanLabel := devops.GetDoubleGroupByLabel("Datalayers", numMetrics)
@@ -119,17 +120,17 @@ func (d *Devops) MaxAllCPU(q query.Query, nHosts int, duration time.Duration) {
 	metrics := devops.GetAllCPUMetrics()
 	selectClauses := d.getSelectClausesAggMetrics("max", metrics)
 
-	sql := fmt.Sprintf(`SELECT date_trunc('hour', ts) AS hour,
-        %s
-        FROM cpu
+	sql := fmt.Sprintf(`SELECT date_trunc('hour', ts) AS hour, 
+        %s 
+        FROM cpu 
         WHERE %s 
-		AND ts >= '%v' AND ts < '%v'
+		AND ts >= '%s' AND ts < '%s' 
         GROUP BY hour 
 		ORDER BY hour`,
 		strings.Join(selectClauses, ", "),
 		d.getHostWhereString(nHosts),
-		interval.StartUnixNano(),
-		interval.EndUnixNano(),
+		interval.StartString(),
+		interval.EndString(),
 	)
 
 	humanLabel := devops.GetMaxAllLabel("Datalayers", nHosts)
@@ -141,8 +142,8 @@ func (d *Devops) MaxAllCPU(q query.Query, nHosts int, duration time.Duration) {
 func (d *Devops) LastPointPerHost(q query.Query) {
 	sql := `SELECT * 
 		FROM cpu 
-		GROUP BY hostname
-		ORDER BY ts DESC
+		GROUP BY hostname 
+		ORDER BY ts DESC 
 		LIMIT 1`
 
 	humanLabel := "Datalayers last row per host"
@@ -164,16 +165,16 @@ func (d *Devops) HighCPUForHosts(q query.Query, nHosts int) {
 	if nHosts == 0 {
 		hostWhereClause = ""
 	} else {
-		hostWhereClause = d.getHostWhereString(nHosts)
+		hostWhereClause = "AND " + d.getHostWhereString(nHosts)
 	}
 
-	sql := fmt.Sprintf(`SELECT *
-		FROM cpu
-		WHERE usage_user > 90.0
-		AND ts >= '%v' AND ts < '%v'
-		AND %s`,
-		interval.StartUnixNano(),
-		interval.EndUnixNano(),
+	sql := fmt.Sprintf(`SELECT * 
+		FROM cpu 
+		WHERE usage_user > 90.0 
+		AND ts >= '%s' AND ts < '%s' 
+		%s`,
+		interval.StartString(),
+		interval.EndString(),
 		hostWhereClause,
 	)
 
@@ -205,7 +206,7 @@ func (d *Devops) getHostWhereString(nHosts int) string {
 func (d *Devops) getSelectClausesAggMetrics(agg string, metrics []string) []string {
 	selectClauses := make([]string, len(metrics))
 	for i, m := range metrics {
-		selectClauses[i] = fmt.Sprintf("%v(%v)", agg, m)
+		selectClauses[i] = fmt.Sprintf("%s(%s)", agg, m)
 	}
 	return selectClauses
 }

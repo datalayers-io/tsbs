@@ -16,7 +16,13 @@ func newProcessor() query.Processor {
 }
 
 func (p *processor) Init(_ int) {
-	// Not implemented.
+	client, err := datalayers.NewClient(sqlEndpoint)
+	if err != nil {
+		panic(err)
+	}
+	// TODO(niebayes): do not hardcode.
+	client.UseDatabase("benchmark")
+	p.client = client
 }
 
 func (p *processor) ProcessQuery(q query.Query, isWarm bool) ([]*query.Stat, error) {
@@ -28,6 +34,11 @@ func (p *processor) ProcessQuery(q query.Query, isWarm bool) ([]*query.Stat, err
 	// how to retrieve back a created prepared statement.
 	// is it necessary to use prepared statements?
 	// does prepared statements affect the isWarm parameters?
+
+	rawQuery := string(flightSqlQuery.RawQuery)
+	if err := p.client.ExecuteQuery(rawQuery); err != nil {
+		return nil, err
+	}
 
 	elapsed := float64(time.Since(start).Nanoseconds()) / 1e6
 	stat := query.GetStat()
