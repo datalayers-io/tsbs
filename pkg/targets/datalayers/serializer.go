@@ -18,7 +18,7 @@ var NULL string = "nil"
 // by Datalayers to serialize simulated data points during data generation.
 type Serializer struct{}
 
-// TODO(niebayes): for each measurement, only the first record contains field keys.
+// TODO(niebayes): for each measurement, only the first record contains field keys. This could speed up deserialization and make benchmarking faster.
 // The serialized data point conforms to the following format:
 // <measurement> <timestamp> <field name>=<field value> <field name>=<field value> ... <compressed data types>
 // where the compressed data conforms to the following format:

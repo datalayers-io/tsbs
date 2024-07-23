@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/timescale/tsbs/cmd/tsbs_generate_queries/databases/datalayers"
 	"github.com/timescale/tsbs/cmd/tsbs_generate_queries/databases/influx"
 	"github.com/timescale/tsbs/cmd/tsbs_generate_queries/databases/timescaledb"
 	"github.com/timescale/tsbs/cmd/tsbs_generate_queries/uses/devops"
@@ -259,7 +260,12 @@ func TestGetUseCaseGenerator(t *testing.T) {
 		return useGen
 	}
 
-	// TODO(niebayes): add entries for Datalayers.
+	bd := datalayers.BaseGenerator{}
+	datalayersGenerator, err := bd.NewDevops(tsStart, tsEnd, scale)
+	if err != nil {
+		t.Fatalf("Error creating datalayers query generator")
+	}
+	checkType(constants.FormatDatalayers, datalayersGenerator)
 
 	bi := influx.BaseGenerator{}
 	indb, err := bi.NewDevops(tsStart, tsEnd, scale)

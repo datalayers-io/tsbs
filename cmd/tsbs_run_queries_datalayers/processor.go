@@ -8,7 +8,8 @@ import (
 )
 
 type processor struct {
-	client *datalayers.Client
+	client           *datalayers.Client
+	doPrintResponses bool
 }
 
 func newProcessor() query.Processor {
@@ -20,23 +21,18 @@ func (p *processor) Init(_ int) {
 	if err != nil {
 		panic(err)
 	}
-	// TODO(niebayes): do not hardcode.
-	client.UseDatabase("benchmark")
+	client.UseDatabase(runner.DBName)
+
 	p.client = client
+	p.doPrintResponses = runner.DoPrintResponses()
 }
 
 func (p *processor) ProcessQuery(q query.Query, isWarm bool) ([]*query.Stat, error) {
 	flightSqlQuery := q.(*query.FlightSqlQuery)
 	start := time.Now()
 
-	// TODO(niebayes): design how to use the prepared statement to speed up processing.
-	// where to store prepared statements.
-	// how to retrieve back a created prepared statement.
-	// is it necessary to use prepared statements?
-	// does prepared statements affect the isWarm parameters?
-
 	rawQuery := string(flightSqlQuery.RawQuery)
-	if err := p.client.ExecuteQuery(rawQuery); err != nil {
+	if err := p.client.ExecuteQuery(rawQuery, p.doPrintResponses); err != nil {
 		return nil, err
 	}
 
