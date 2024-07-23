@@ -11,7 +11,7 @@ import (
 	"github.com/apache/arrow/go/v16/arrow/array"
 	"github.com/apache/arrow/go/v16/arrow/flight/flightsql"
 	"github.com/apache/arrow/go/v16/arrow/memory"
-	"github.com/prometheus/common/log"
+	// "github.com/prometheus/common/log"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"

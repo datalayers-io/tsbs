@@ -10,8 +10,6 @@ type FlightSqlQuery struct {
 	HumanLabel       []byte
 	HumanDescription []byte
 	RawQuery         []byte
-	StartTimestamp   int64
-	EndTimestamp     int64
 	id               uint64
 }
 
@@ -22,8 +20,6 @@ var FlightSqlQueryPool = sync.Pool{
 			HumanLabel:       []byte{},
 			HumanDescription: []byte{},
 			RawQuery:         []byte{},
-			StartTimestamp:   0,
-			EndTimestamp:     0,
 		}
 	},
 }
@@ -34,6 +30,7 @@ func NewFlightSqlQuery() *FlightSqlQuery {
 }
 
 // GetID returns the ID of this Query
+// Warning: GetID is not used for now.
 func (q *FlightSqlQuery) GetID() uint64 {
 	return q.id
 }
@@ -63,8 +60,6 @@ func (q *FlightSqlQuery) Release() {
 	q.HumanLabel = q.HumanLabel[:0]
 	q.HumanDescription = q.HumanDescription[:0]
 	q.id = 0
-	q.StartTimestamp = 0
-	q.EndTimestamp = 0
 
 	FlightSqlQueryPool.Put(q)
 }
