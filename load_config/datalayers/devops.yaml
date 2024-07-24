@@ -4,7 +4,7 @@ data-source:
     location: ./datalayers_devops.data
 loader:
   db-specific:
-    sql-endpoint: 127.0.0.1:8360
+    sql-endpoint: 127.0.0.1:28360
     batch-size: "5000"
     partition-num: 16
     partition-by-fields:
