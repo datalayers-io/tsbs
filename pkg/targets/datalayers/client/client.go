@@ -107,6 +107,9 @@ func (clt *Client) ExecuteInsertPrepare(preparedStatement *flightsql.PreparedSta
 		return err
 	}
 	return clt.doGetWithFlightInfo(flightInfo)
+	// TODO(niebayes): datalayers currently does not support call ExecuteUpdate on prepared statements.
+	// calling ExecuteUpdate might be faster than calling Execute since there's less RPCs sent.
+	//
 	// affectedRows, err := preparedStatement.ExecuteUpdate(clt.ctx)
 	// if err != nil {
 	// 	return err
@@ -132,6 +135,41 @@ func (clt *Client) doGetWithFlightInfo(flightInfo *flight.FlightInfo) error {
 	}
 
 	flightReader.Release()
+	return nil
+}
+
+func (clt *Client) ExecuteQuery(query string, doPrintResponses bool) error {
+	log.Debugf("Execute Query: %v", query)
+
+	flightInfo, err := clt.inner.Execute(clt.ctx, query)
+	if err != nil {
+		panic(err)
+	}
+
+	flightReader, err := clt.inner.DoGet(clt.ctx, flightInfo.GetEndpoint()[0].GetTicket())
+	if err != nil {
+		panic(err)
+	}
+
+	for flightReader.Next() {
+		record := flightReader.Record()
+
+		log.Debugf("Read a record. numRows: %v, numCols: %v", record.NumRows(), record.NumCols())
+
+		if doPrintResponses {
+			rowStr := make([]string, record.NumCols())
+			for i := 0; i < int(record.NumRows()); i++ {
+				for _, col := range record.Columns() {
+					rowStr[i] = col.ValueStr(i)
+				}
+				println(strings.Join(rowStr, ","))
+			}
+		}
+
+		record.Release()
+	}
+	flightReader.Release()
+
 	return nil
 }
 

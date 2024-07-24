@@ -332,7 +332,7 @@ func TestGetSerializer(t *testing.T) {
 
 	checkWriteHeader(constants.FormatInflux, false)
 	checkWriteHeader(constants.FormatTimescaleDB, true)
-	// TODO(niebayes): add entries for Datalayers.
+	checkWriteHeader(constants.FormatDatalayers, false)
 }
 
 type mockSerializer struct {
