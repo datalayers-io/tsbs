@@ -1,6 +1,12 @@
 该仓库是 Datalayers TSBS 项目，修改自 `timescale/tsbs` 项目。
 ---
 
+# TSBS 压测对象
+TODO
+bulk load
+query
+non-parallel
+
 # 编译
 执行 `make` 编译所有必需的 binaries。编译好的 binaries 会存放在项目根目录的 `bin` 目录下。
 
@@ -133,5 +139,56 @@ loaded 1944000 rows in 39.884sec with 8 workers (mean rate 48741.86 rows/sec)
 
 # 查询压测
 TODO
+
+对于 devops 和 cpu-only 场景而言，TSBS 针对以下查询进行压测：
+- `single-groupby-1-1-1`: Simple aggregrate (MAX) on one metric for 1 host, every 5 mins for 1 hour
+- `single-groupby-1-8-1`: Simple aggregrate (MAX) on one metric for 8 hosts, every 5 mins for 1 hour
+- `single-groupby-5-1-1`: Simple aggregrate (MAX) on 5 metrics for 1 host, every 5 mins for 1 hour
+- `single-groupby-1-1-12`: Simple aggregrate (MAX) on one metric for 1 host, every 5 mins for 12 hours
+- `single-groupby-5-1-12`: Simple aggregrate (MAX) on 5 metrics for 1 host, every 5 mins for 12 hours
+- `single-groupby-5-8-1`: Simple aggregrate (MAX) on 5 metrics for 8 hosts, every 5 mins for 1 hour
+- `double-groupby-1`: Aggregate on across both time and host, giving the average of 1 CPU metric per host per hour for 24 hours
+- `double-groupby-5`: Aggregate on across both time and host, giving the average of 5 CPU metrics per host per hour for 24 hours
+- `double-groupby-all`: Aggregate on across both time and host, giving the average of all (10) CPU metrics per host per hour for 24 hours
+- `groupby-orderby-limit`: The last 5 aggregate readings (across time) before a randomly chosen endpoint
+- `cpu-max-all-1`: Aggregate across all CPU metrics per hour over 8 hour for a single host
+- `cpu-max-all-8`: Aggregate across all CPU metrics per hour over 8 hour for eight hosts
+- `cpu-max-all-32-24`: Aggregate across all CPU metrics per hour over 24 hour for 32 hosts
+- `high-cpu-1`: All the readings where one metric is above a threshold for a particular host
+- `high-cpu-all`: All the readings where one metric is above a threshold across all hosts
+- `lastpoint`: The last reading for each host
+
+[TODO(niebayes)] 对于 iot 场景而言，TSBS 针对以下查询进行压测：
+- `long-daily-sessions`:
+- `avg-vs-projected-fuel-consumption`:
+- `avg-daily-driving-session`:
+- `breakdown-frequency`:
+- `last-loc`:
+- `long-driving-sessions`:
+- `high-load`:
+- `stationary-trucks`:
+- `avg-daily-driving-duration`:
+- `avg-load`:
+- `daily-activity`:
+- `single-last-loc`:
+- `low-fuel`:
+
 ## 生成查询命令
+生成单个查询的例子：
+``` shell
+./bin/tsbs_generate_queries \
+  --format="datalayers" \
+  --query-type="single-groupby-1-1-1" \
+  --queries=100 \
+  --scale=100 \
+  --seed=42 \
+  --use-case="devops" \
+  --timestamp-start="2016-01-01T00:00:00Z" \
+  --timestamp-end="2016-01-01T06:00:01Z" \
+  --file="./datalayers-devops-single-groupby-1-1-1"
+```
+
 ## 执行查询
+
+# TSBS 压测框架解析
+TODO
