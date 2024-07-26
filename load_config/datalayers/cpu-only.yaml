@@ -1,26 +1,27 @@
 data-source:
   type: FILE
   file:
-    location: ./datalayers_cpu-only.data
+    location: ./data/datalayers/tmp/cpu-only-100-31d.data
+    # location: ./data/datalayers/tmp/cpu-only-4000-4d.data
 loader:
   db-specific:
-    sql-endpoint: 127.0.0.1:8360
-    batch-size: "5000"
+    sql-endpoint: 10.0.0.10:8360
+    batch-size: "10"
     partition-num: 16
     partition-by-fields:
-        - "cpu:hostname,region,datacenter,rack"
+        - "cpu:hostname"
   runner:
-    batch-size: "5000"
+    batch-size: "10"
     channel-capacity: "0"
     db-name: benchmark
     do-abort-on-exist: false
     do-create-db: true
     do-load: true
     flow-control: true
-    hash-workers: true
+    hash-workers: false
     insert-intervals: ""
     limit: "0"
-    reporting-period: 5s
+    reporting-period: 10s
     seed: 42
-    workers: "8"
+    workers: "32"
   target: datalayers

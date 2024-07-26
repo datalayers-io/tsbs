@@ -2,7 +2,9 @@
 
 SEED=42
 
-alias generate_query='./my_scripts/common/generate_query.sh'
+generate_query() {
+  ./my_scripts/generate_query.sh "$@"
+}
 
 # 检查是否提供了参数
 if [ -z "$1" ]; then

@@ -44,8 +44,6 @@ func (dc *dBCreator) CreateDB(dbName string) error {
 		}
 		return err
 	}
-	// TODO(niebayes): maybe not call UseDatabase at here.
-	dc.client.UseDatabase(dbName)
 	return nil
 }
 

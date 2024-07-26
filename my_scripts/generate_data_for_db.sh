@@ -2,7 +2,9 @@
 
 SEED=42
 
-alias generate_data='./my_scripts/common/generate_data.sh'
+generate_data() {
+  ./my_scripts/generate_data.sh "$@"
+}
 
 # 检查是否提供了参数
 if [ -z "$1" ]; then

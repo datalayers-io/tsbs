@@ -31,16 +31,16 @@ coverage:
 	$(GOTEST) -race -coverprofile=coverage.txt -covermode=atomic ./...
 
 # Release mode.
-# tsbs_%: $(wildcard ./cmd/$@/*.go)
-# 	$(GOGET) ./cmd/$@
-# 	$(GOBUILD) -o bin/$@ ./cmd/$@
-# 	$(GOINSTALL) ./cmd/$@
-
-# Debug mode.
 tsbs_%: $(wildcard ./cmd/$@/*.go)
 	$(GOGET) ./cmd/$@
-	$(GOBUILD) -gcflags "all=-N -l" -o bin/$@ ./cmd/$@
+	$(GOBUILD) -o bin/$@ ./cmd/$@
 	$(GOINSTALL) ./cmd/$@
+
+# Debug mode.
+# tsbs_%: $(wildcard ./cmd/$@/*.go)
+# 	$(GOGET) ./cmd/$@
+# 	$(GOBUILD) -gcflags "all=-N -l" -o bin/$@ ./cmd/$@
+# 	$(GOINSTALL) ./cmd/$@
 
 checkfmt:
 	@echo 'Checking gofmt';\
