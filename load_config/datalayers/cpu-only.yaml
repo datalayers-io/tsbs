@@ -7,9 +7,6 @@ loader:
   db-specific:
     sql-endpoint: 10.0.0.10:8360
     batch-size: "10"
-    partition-num: 16
-    partition-by-fields:
-        - "cpu:hostname"
   runner:
     batch-size: "10"
     channel-capacity: "0"
