@@ -27,17 +27,16 @@ case $DURATION in
         ;;
 esac
 
-OUT="./data/$FORMAT/$USE_CASE-$SCALE-$DURATION.data"
+OUT="./data/$FORMAT/tmp/$USE_CASE-$SCALE-$DURATION.data"
 
 # 提取目录路径
 OUT_DIR=$(dirname "$OUT")
 # 检查目录是否存在，如果不存在则创建
 if [ ! -d "$OUT_DIR" ]; then
   mkdir -p "$OUT_DIR"
-  echo "Directory $OUT_DIR created."
-else
-  echo "Directory $OUT_DIR already exists."
 fi
+
+echo "Generating data $OUT ..."
 
 ./bin/tsbs_generate_data \
     --format="$FORMAT" \

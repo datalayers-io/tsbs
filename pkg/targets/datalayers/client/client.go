@@ -26,6 +26,7 @@ func NewClient(sqlEndpoint string) (*Client, error) {
 	var grpcDialOpts = []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	}
+	// TODO(niebayes): maybe some grpc dial options are helpful for improving performance.
 	flightSqlClient, err := flightsql.NewClient(sqlEndpoint, nil, nil, grpcDialOpts...)
 	if err != nil {
 		return nil, err
@@ -76,8 +77,9 @@ func (clt *Client) CreateTable(dbName string, tableName string, ifNotExists bool
 
 	partitionByClause := fmt.Sprintf("PARTITION BY HASH(%v) PARTITIONS %v", strings.Join(partitionByFields, ","), partitionNum)
 	engineClause := "ENGINE=TimeSeries"
+	withClause := "with(memtable_size=2048MiB)"
 
-	allClauses := []string{createClause, columnDefClause, partitionByClause, engineClause}
+	allClauses := []string{createClause, columnDefClause, partitionByClause, engineClause, withClause}
 	createTableStmt := strings.Join(allClauses, "\n")
 
 	log.Debugf("The create table statement for table %v is:\n%v", tableName, createTableStmt)
@@ -95,6 +97,7 @@ func (clt *Client) InsertPrepare(dbName string, tableName string, arrowFields []
 	}
 
 	insertPrepareStmt := fmt.Sprintf("INSERT INTO %v.%v (%v) VALUES (%v)", dbName, tableName, strings.Join(fieldNames, ","), strings.Join(placeHolders, ","))
+	// fmt.Printf("cpu insert prepared statement: %v\n", insertPrepareStmt)
 
 	log.Debugf("The prepared statement for inserting into table %v is:\n%v", tableName, insertPrepareStmt)
 
@@ -107,9 +110,8 @@ func (clt *Client) ExecuteInsertPrepare(preparedStatement *flightsql.PreparedSta
 		return err
 	}
 	return clt.doGetWithFlightInfo(flightInfo)
-	// TODO(niebayes): datalayers currently does not support call ExecuteUpdate on prepared statements.
-	// calling ExecuteUpdate might be faster than calling Execute since there's less RPCs sent.
-	//
+
+	// TODO(niebayes): using ExecuteUpdate may be helpful for improving performance.
 	// affectedRows, err := preparedStatement.ExecuteUpdate(clt.ctx)
 	// if err != nil {
 	// 	return err
@@ -133,7 +135,6 @@ func (clt *Client) doGetWithFlightInfo(flightInfo *flight.FlightInfo) error {
 	if err != nil {
 		return err
 	}
-
 	flightReader.Release()
 	return nil
 }

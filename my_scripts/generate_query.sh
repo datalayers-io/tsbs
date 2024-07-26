@@ -50,12 +50,11 @@ OUT_DIR=$(dirname "$OUT")
 # 检查目录是否存在，如果不存在则创建
 if [ ! -d "$OUT_DIR" ]; then
   mkdir -p "$OUT_DIR"
-  echo "Directory $OUT_DIR created."
-else
-  echo "Directory $OUT_DIR already exists."
 fi
 
-echo ./bin/tsbs_generate_queries \
+echo "Generating query $OUT ..."
+
+./bin/tsbs_generate_queries \
   --format="$FORMAT" \
   --use-case="$USE_CASE" \
   --query-type="$QUERY_TYPE" \

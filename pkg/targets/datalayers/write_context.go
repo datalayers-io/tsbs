@@ -12,40 +12,66 @@ import (
 	datalayers "github.com/timescale/tsbs/pkg/targets/datalayers/client"
 )
 
+var cpuFieldNames []string = []string{
+	"ts", "hostname", "region", "datacenter", "rack", "os", "arch", "team", "service", "service_version", "service_environment",
+	"usage_user", "usage_system", "usage_idle", "usage_nice", "usage_iowait", "usage_irq", "usage_softirq", "usage_steal",
+	"usage_guest", "usage_guest_nice",
+}
+
+var cpuFieldTypes []arrow.DataType = []arrow.DataType{
+	arrow.FixedWidthTypes.Timestamp_ns,
+	arrow.BinaryTypes.String,
+	arrow.BinaryTypes.String,
+	arrow.BinaryTypes.String,
+	arrow.BinaryTypes.String,
+	arrow.BinaryTypes.String,
+	arrow.BinaryTypes.String,
+	arrow.BinaryTypes.String,
+	arrow.BinaryTypes.String,
+	arrow.BinaryTypes.String,
+	arrow.BinaryTypes.String,
+	arrow.PrimitiveTypes.Int64,
+	arrow.PrimitiveTypes.Int64,
+	arrow.PrimitiveTypes.Int64,
+	arrow.PrimitiveTypes.Int64,
+	arrow.PrimitiveTypes.Int64,
+	arrow.PrimitiveTypes.Int64,
+	arrow.PrimitiveTypes.Int64,
+	arrow.PrimitiveTypes.Int64,
+	arrow.PrimitiveTypes.Int64,
+	arrow.PrimitiveTypes.Int64,
+}
+
 type writeContext struct {
 	arrowRecordBuilder *array.RecordBuilder
 	// The prepared statement for writing to a table.
 	preparedStatement *flightsql.PreparedStatement
 }
 
-func NewWriteContext(client *datalayers.Client, p *point, dbName string, partitionNum uint, partitionByFields []string) *writeContext {
-	tableName := p.measurement
-	numFields := len(p.fields) + 1
-	arrowFields := make([]arrow.Field, 0, numFields)
-
-	arrowFields = append(arrowFields, arrow.Field{
-		Name:     "ts",
-		Type:     arrow.FixedWidthTypes.Timestamp_ns,
-		Nullable: false,
-	})
-
-	for _, field := range p.fields {
-		arrowFields = append(arrowFields, arrow.Field{
-			Name:     field.name,
-			Type:     field.dataType,
-			Nullable: true,
-		})
+func makeCpuWriteContext(client *datalayers.Client, dbName string) *writeContext {
+	if len(cpuFieldNames) != len(cpuFieldTypes) {
+		panic(fmt.Sprintf("len(cpuFieldNames)[%v] != len(cpuFieldTypes)[%v]", len(cpuFieldNames), len(cpuFieldTypes)))
 	}
 
-	// Creates table.
-	if err := client.CreateTable(dbName, tableName, true, arrowFields, partitionByFields, partitionNum); err != nil {
-		panic(fmt.Sprintf("failed to create table %v. error: %v", tableName, err))
+	arrowFields := make([]arrow.Field, 0, len(cpuFieldNames))
+	for i := 0; i < len(cpuFieldNames); i++ {
+		nullable := true
+		// Only the timestamp and hostname fields are not nullable.
+		if i == 0 || i == 1 {
+			nullable = false
+		}
+		arrowField := arrow.Field{
+			Name:     cpuFieldNames[i],
+			Type:     cpuFieldTypes[i],
+			Nullable: nullable,
+		}
+		arrowFields = append(arrowFields, arrowField)
 	}
 
 	// Initializes a insert prepared statement.
-	preparedStatement, err := client.InsertPrepare(dbName, tableName, arrowFields)
+	preparedStatement, err := client.InsertPrepare(dbName, "cpu", arrowFields)
 	if err != nil {
-		panic(fmt.Sprintf("failed to initialize a insert prepared statement for table %v. error: %v", tableName, err))
+		panic(fmt.Sprintf("failed to initialize a insert prepared statement for table %v. error: %v", "cpu", err))
 	}
 
 	// Initializes an arrow record builder.
@@ -56,15 +82,15 @@ func NewWriteContext(client *datalayers.Client, p *point, dbName string, partiti
 	return &writeContext{arrowRecordBuilder, preparedStatement}
 }
 
-func (ctx *writeContext) append(p *point) {
+// TODO(niebayes): 这里似乎还有一些优化空间
+func (ctx *writeContext) appendRaw(values []string) {
 	arrowRecordBuilder := ctx.arrowRecordBuilder
-	appendFieldValue(arrowRecordBuilder.Field(0), arrow.FixedWidthTypes.Timestamp_ns, p.timestamp)
-	for i, field := range p.fields {
-		fieldBuilder := arrowRecordBuilder.Field(i + 1)
-		if field.value == NULL {
+	for i, value := range values {
+		fieldBuilder := arrowRecordBuilder.Field(i)
+		if value == NULL {
 			fieldBuilder.AppendNull()
 		} else {
-			appendFieldValue(fieldBuilder, field.dataType, field.value)
+			appendFieldValue(fieldBuilder, cpuFieldTypes[i], value)
 		}
 	}
 }
@@ -73,6 +99,7 @@ func (ctx *writeContext) flush() arrow.Record {
 	return ctx.arrowRecordBuilder.NewRecord()
 }
 
+// TODO(niebayes): 给每个 builder 都去预分配空间。
 func appendFieldValue(fieldBuilder array.Builder, fieldType arrow.DataType, fieldValue string) {
 	switch fieldType {
 	case arrow.FixedWidthTypes.Boolean:

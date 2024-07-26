@@ -1,6 +1,8 @@
 package load
 
 import (
+	"fmt"
+
 	"github.com/timescale/tsbs/pkg/targets"
 )
 
@@ -18,6 +20,8 @@ func scanWithoutFlowControl(
 		panic("batch size can't be 0")
 	}
 	numChannels := len(channels)
+	fmt.Printf("numChannels: %v\n", numChannels)
+
 	batches := make([]targets.Batch, numChannels)
 	for i := 0; i < numChannels; i++ {
 		batches[i] = factory.New()
@@ -36,6 +40,7 @@ func scanWithoutFlowControl(
 		itemsRead++
 
 		idx := indexer.GetIndex(item)
+		// fmt.Printf("idx: %v\n", idx)
 		batches[idx].Append(item)
 
 		if batches[idx].Len() >= batchSize {

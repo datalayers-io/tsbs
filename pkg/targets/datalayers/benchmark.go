@@ -10,10 +10,8 @@ import (
 )
 
 type DatalayersConfig struct {
-	SqlEndpoint       string   `yaml:"sql-endpoint" mapstructure:"sql-endpoint"`
-	BatchSize         uint     `yaml:"batch-size" mapstructure:"batch-size"`
-	PartitionNum      uint     `yaml:"partition-num" mapstructure:"partition-num"`
-	PartitionByFields []string `yaml:"partition-by-fields" mapstructure:"partition-by-fields"`
+	SqlEndpoint string `yaml:"sql-endpoint" mapstructure:"sql-endpoint"`
+	BatchSize   uint   `yaml:"batch-size" mapstructure:"batch-size"`
 }
 
 // Wraps the context used during a benchmark.
@@ -35,13 +33,12 @@ func NewBenchmark(targetDB string, dataSourceConfig *source.DataSourceConfig, da
 	log.Infof("Read datalayers config:")
 	log.Infof("datalayers.sql-endpoint: %v", datalayersConfig.SqlEndpoint)
 	log.Infof("datalayers.batch-size: %v", datalayersConfig.BatchSize)
-	log.Infof("datalayers.partition-num: %v", datalayersConfig.PartitionNum)
-	log.Infof("datalayers.partition-by-fields: %v", datalayersConfig.PartitionByFields)
 
 	datalayersClient, err := datalayers.NewClient(datalayersConfig.SqlEndpoint)
 	if err != nil {
 		return nil, err
 	}
+	datalayersClient.UseDatabase(targetDB)
 	return &benchmark{targetDB, dataSourceConfig, datalayersClient, datalayersConfig}, nil
 }
 
@@ -52,7 +49,7 @@ func (b *benchmark) GetDataSource() targets.DataSource {
 
 // GetBatchFactory returns the BatchFactory to use for this Benchmark
 func (b *benchmark) GetBatchFactory() targets.BatchFactory {
-	return NewBatchFactory(b.datalayersConfig.BatchSize)
+	return NewBatchFactory(b.datalayersConfig.BatchSize, &batchPool)
 }
 
 // GetPointIndexer returns the PointIndexer to use for this Benchmark
@@ -62,7 +59,7 @@ func (b *benchmark) GetPointIndexer(maxPartitions uint) targets.PointIndexer {
 
 // GetProcessor returns the Processor to use for this Benchmark
 func (b *benchmark) GetProcessor() targets.Processor {
-	return NewProcessor(b.datalayersClient, b.targetDB, b.datalayersConfig.PartitionNum, b.datalayersConfig.PartitionByFields)
+	return NewProcessor(b.datalayersClient, b.targetDB, &batchPool)
 }
 
 // GetDBCreator returns the DBCreator to use for this Benchmark

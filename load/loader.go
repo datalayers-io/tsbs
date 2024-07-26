@@ -3,13 +3,14 @@ package load
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/timescale/tsbs/pkg/targets"
 	"io/ioutil"
 	"log"
 	"math/rand"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/timescale/tsbs/pkg/targets"
 
 	"github.com/spf13/pflag"
 	"github.com/timescale/tsbs/load/insertstrategy"
@@ -91,6 +92,7 @@ func GetBenchmarkRunner(c BenchmarkRunnerConfig) BenchmarkRunner {
 
 	loader.initialRand = rand.New(rand.NewSource(loader.Seed))
 
+	// TODO(niebayes): the sleep regulator may be helpful for balancing load on workers, so that the overall performance can be improved.
 	var err error
 	if c.InsertIntervals == "" {
 		loader.sleepRegulator = insertstrategy.NoWait()
@@ -180,6 +182,7 @@ func (l *CommonBenchmarkRunner) saveTestResult(took time.Duration, start time.Ti
 // RunBenchmark takes in a Benchmark b and uses it to run the load benchmark
 func (l *CommonBenchmarkRunner) RunBenchmark(b targets.Benchmark) {
 	wg, start := l.preRun(b)
+	// TODO(niebayes): try to improve the performace by setting the channel capacity to different values.
 	var numChannels, capacity uint
 	if l.HashWorkers {
 		numChannels = l.Workers
