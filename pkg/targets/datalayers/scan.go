@@ -3,6 +3,7 @@ package datalayers
 import (
 	"fmt"
 	"sync"
+	"time"
 
 	// "log"
 
@@ -35,20 +36,74 @@ type dataSource struct {
 	cursor int
 }
 
+func parallelReadFile(fileName string) []byte {
+	numReaders := int64(4)
+
+	file, err := os.Open(fileName)
+	if err != nil {
+		panic(fmt.Sprintf("failed to open file %v. error: %v", fileName, err))
+	}
+	defer file.Close()
+
+	fileInfo, err := file.Stat()
+	if err != nil {
+		panic(fmt.Sprintf("failed to get file info. error: %v", err))
+	}
+	fileSize := fileInfo.Size()
+
+	chunkSize := (fileSize + numReaders - 1) / numReaders
+
+	var wg sync.WaitGroup
+	buffers := make([][]byte, numReaders)
+	for i := int64(0); i < numReaders; i++ {
+		wg.Add(1)
+		go func(i int64) {
+			defer wg.Done()
+			startOffset := i * chunkSize
+			endOffset := min(startOffset+chunkSize, fileSize)
+
+			buffer := make([]byte, endOffset-startOffset)
+			_, err := file.ReadAt(buffer, startOffset)
+			if err != nil {
+				panic(fmt.Sprintf("failed to read file at offset %d. error: %v", startOffset, err))
+			}
+			buffers[i] = buffer
+		}(i)
+	}
+	wg.Wait()
+
+	var flatBuffer []byte
+	for _, buffer := range buffers {
+		flatBuffer = append(flatBuffer, buffer...)
+	}
+	return flatBuffer
+}
+
 // Creates a new file data source.
 // TODO(niebayes): 唯一的生产者线程应该做尽可能轻量化的任务。因为消费者线程数是可调的，所以应该把一些可能的工作交给消费者去处理。
 func NewDataSource(fileName string) targets.DataSource {
 	// TODO(niebayes): 使用多个 go routines 去读取这个文件以加快准备数据的速度。
+	// data, err := os.ReadFile(fileName)
+	// if err != nil {
+	// 	panic(fmt.Sprintf("failed to read file %v. error: %v", fileName, err))
+	// }
+	start := time.Now()
+	// data := parallelReadFile(fileName)
 	data, err := os.ReadFile(fileName)
 	if err != nil {
 		panic(fmt.Sprintf("failed to read file %v. error: %v", fileName, err))
 	}
+	elapsed := time.Since(start).Milliseconds()
+	fmt.Printf("Reading file costs %v ms\n", elapsed)
+
 	lines := strings.Split(string(data), "\n")
 	return &dataSource{lines: lines, cursor: 0}
 }
 
 // Retrieves the next item from the data source.
 // An item only contains a single data point for Datalayers.
+// TODO(niebayes): 修改生产者-消费者分发的逻辑。生产者预先将所有数据按消费者数量去切分，然后通过 round-robin 的 GetIndex 以及 NextItem，
+// 一次性将每个消费者应该消费的数据一次性交给他们，然后生产者的任务就结束了，消费者各自为战。虽然实时的写入速度不好看，但是最终的写入速度应该有提升。
 func (ds *dataSource) NextItem() data.LoadedPoint {
 	if ds.cursor >= len(ds.lines) {
 		return data.LoadedPoint{}

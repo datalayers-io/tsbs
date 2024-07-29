@@ -48,7 +48,7 @@ type writeContext struct {
 	preparedStatement *flightsql.PreparedStatement
 }
 
-func makeCpuWriteContext(client *datalayers.Client, dbName string) *writeContext {
+func makeCpuWriteContext(client *datalayers.Client, dbName string, batchSize int) *writeContext {
 	if len(cpuFieldNames) != len(cpuFieldTypes) {
 		panic(fmt.Sprintf("len(cpuFieldNames)[%v] != len(cpuFieldTypes)[%v]", len(cpuFieldNames), len(cpuFieldTypes)))
 	}
@@ -76,21 +76,20 @@ func makeCpuWriteContext(client *datalayers.Client, dbName string) *writeContext
 
 	// Initializes an arrow record builder.
 	arrowSchema := arrow.NewSchema(arrowFields, nil)
-	// FIXME(niebayes): is it good to assign an allocator to each record builder?
 	arrowRecordBuilder := array.NewRecordBuilder(memory.NewGoAllocator(), arrowSchema)
+	arrowRecordBuilder.Reserve(batchSize)
 
 	return &writeContext{arrowRecordBuilder, preparedStatement}
 }
 
-// TODO(niebayes): 这里似乎还有一些优化空间
-func (ctx *writeContext) appendRaw(values []string) {
+func (ctx *writeContext) appendRow(values []string) {
 	arrowRecordBuilder := ctx.arrowRecordBuilder
 	for i, value := range values {
 		fieldBuilder := arrowRecordBuilder.Field(i)
 		if value == NULL {
 			fieldBuilder.AppendNull()
 		} else {
-			appendFieldValue(fieldBuilder, cpuFieldTypes[i], value)
+			appendFieldValue(fieldBuilder, value)
 		}
 	}
 }
@@ -99,61 +98,21 @@ func (ctx *writeContext) flush() arrow.Record {
 	return ctx.arrowRecordBuilder.NewRecord()
 }
 
-// TODO(niebayes): 给每个 builder 都去预分配空间。
-func appendFieldValue(fieldBuilder array.Builder, fieldType arrow.DataType, fieldValue string) {
-	switch fieldType {
-	case arrow.FixedWidthTypes.Boolean:
-		builder := fieldBuilder.(*array.BooleanBuilder)
-		v := fieldValue == "true"
-		builder.Append(v)
-	case arrow.PrimitiveTypes.Int32:
-		builder := fieldBuilder.(*array.Int32Builder)
-		v, err := strconv.ParseInt(fieldValue, 10, 32)
-		if err != nil {
-			panic(fmt.Sprintf("failed to convert a string to int32. error: %v", err))
+func appendFieldValue(fieldBuilder array.Builder, fieldValue string) {
+	switch builder := fieldBuilder.(type) {
+	case *array.Int64Builder:
+		if err := builder.AppendValueFromString(fieldValue); err != nil {
+			panic(err)
 		}
-		builder.Append(int32(v))
-	case arrow.PrimitiveTypes.Int64:
-		builder := fieldBuilder.(*array.Int64Builder)
-		v, err := strconv.ParseInt(fieldValue, 10, 64)
-		if err != nil {
-			panic(fmt.Sprintf("failed to convert a string to int64. error: %v", err))
-		}
-		builder.Append(v)
-	case arrow.PrimitiveTypes.Float32:
-		builder := fieldBuilder.(*array.Float32Builder)
-		v, err := strconv.ParseFloat(fieldValue, 32)
-		if err != nil {
-			panic(fmt.Sprintf("failed to convert a string to float32. error: %v", err))
-		}
-		builder.Append(float32(v))
-	case arrow.PrimitiveTypes.Float64:
-		builder := fieldBuilder.(*array.Float64Builder)
-		v, err := strconv.ParseFloat(fieldValue, 64)
-		if err != nil {
-			panic(fmt.Sprintf("failed to convert a string to float64. error: %v", err))
-		}
-		builder.Append(v)
-	case arrow.BinaryTypes.Binary:
-		builder := fieldBuilder.(*array.BinaryBuilder)
-		v := []byte(fieldValue)
-		builder.Append(v)
-	case arrow.BinaryTypes.String:
-		builder := fieldBuilder.(*array.StringBuilder)
-		v := fieldValue
-		builder.Append(v)
-	case arrow.FixedWidthTypes.Timestamp_ns:
-		builder := fieldBuilder.(*array.TimestampBuilder)
+	case *array.StringBuilder:
+		builder.Append(fieldValue)
+	case *array.TimestampBuilder:
 		ts, err := strconv.ParseInt(fieldValue, 10, 64)
 		if err != nil {
 			panic(fmt.Sprintf("failed to convert a string to int64. error: %v", err))
 		}
-		v, err := arrow.TimestampFromTime(time.Unix(0, ts).UTC(), arrow.Nanosecond)
-		if err != nil {
-			panic(fmt.Sprintf("failed to convert a string to timestamp. error: %v", err))
-		}
-		builder.Append(v)
+		builder.AppendTime(time.Unix(0, ts))
 	default:
-		panic(fmt.Sprintf("unexpected field type: %v", fieldType))
+		panic(fmt.Sprintf("unexpected field builder: %v", builder))
 	}
 }

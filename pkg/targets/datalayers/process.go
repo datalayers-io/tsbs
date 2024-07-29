@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	// "github.com/prometheus/common/log"
+
 	"github.com/timescale/tsbs/pkg/targets"
 	datalayers "github.com/timescale/tsbs/pkg/targets/datalayers/client"
 )
@@ -19,8 +20,8 @@ type processor struct {
 	batchPool       *sync.Pool
 }
 
-func NewProcessor(client *datalayers.Client, targetDB string, batchPool *sync.Pool) targets.Processor {
-	cpuWriteContext := makeCpuWriteContext(client, targetDB)
+func NewProcessor(client *datalayers.Client, targetDB string, batchPool *sync.Pool, batchSize int) targets.Processor {
+	cpuWriteContext := makeCpuWriteContext(client, targetDB, batchSize)
 	return &processor{targetDB: targetDB, client: client, cpuWriteContext: cpuWriteContext, batchPool: batchPool}
 }
 
@@ -43,11 +44,10 @@ func (proc *processor) ProcessBatch(b targets.Batch, doLoad bool) (metricCount, 
 			if len(values) != len(cpuFieldNames) {
 				continue
 			}
-			proc.cpuWriteContext.appendRaw(values)
+			proc.cpuWriteContext.appendRow(values)
 		}
 	}
 
-	// TODO(niebayes): try to use the naive insert rather than the insert prepared statement.
 	if len(batch.dataSegments) > 0 {
 		record := proc.cpuWriteContext.flush()
 
