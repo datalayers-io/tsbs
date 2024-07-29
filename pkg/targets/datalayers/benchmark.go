@@ -59,7 +59,7 @@ func (b *benchmark) GetPointIndexer(maxPartitions uint) targets.PointIndexer {
 
 // GetProcessor returns the Processor to use for this Benchmark
 func (b *benchmark) GetProcessor() targets.Processor {
-	return NewProcessor(b.datalayersClient, b.targetDB, &batchPool)
+	return NewProcessor(b.datalayersClient, b.targetDB, &batchPool, int(b.datalayersConfig.BatchSize))
 }
 
 // GetDBCreator returns the DBCreator to use for this Benchmark
