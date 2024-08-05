@@ -139,24 +139,34 @@ func (clt *Client) doGetWithFlightInfo(flightInfo *flight.FlightInfo) error {
 	return nil
 }
 
-// TODO(niebayes): use direct query to improve performance.
 func (clt *Client) ExecuteQuery(query string, doPrintResponses bool) error {
-	log.Debugf("Execute Query: %v", query)
+	// log.Debugf("Execute Query: %v", query)
 
-	flightInfo, err := clt.inner.Execute(clt.ctx, query)
+	// Directly constructs a ticket to eliminate a call of Execute to improve query performance.
+	ticketData, err := flightsql.CreateStatementQueryTicket([]byte(query))
+	if err != nil {
+		panic(err)
+	}
+	ticket := &flight.Ticket{Ticket: ticketData}
+	flightReader, err := clt.inner.DoGet(clt.ctx, ticket)
 	if err != nil {
 		panic(err)
 	}
 
-	flightReader, err := clt.inner.DoGet(clt.ctx, flightInfo.GetEndpoint()[0].GetTicket())
-	if err != nil {
-		panic(err)
-	}
+	// flightInfo, err := clt.inner.Execute(clt.ctx, query)
+	// if err != nil {
+	// 	panic(err)
+	// }
+
+	// flightReader, err := clt.inner.DoGet(clt.ctx, flightInfo.GetEndpoint()[0].GetTicket())
+	// if err != nil {
+	// 	panic(err)
+	// }
 
 	for flightReader.Next() {
 		record := flightReader.Record()
 
-		log.Debugf("Read a record. numRows: %v, numCols: %v", record.NumRows(), record.NumCols())
+		// log.Debugf("Read a record. numRows: %v, numCols: %v", record.NumRows(), record.NumCols())
 
 		if doPrintResponses {
 			rowStr := make([]string, record.NumCols())
