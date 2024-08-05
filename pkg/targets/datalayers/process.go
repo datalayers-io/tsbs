@@ -133,17 +133,11 @@ func (proc *processor) ProcessBatch(b targets.Batch, doLoad bool) (metricCount, 
 
 		for _, line := range segment {
 			values := strings.Split(line, " ")
-			// A row could consist of complete columns of data.
-			// Or it could consist of the timestamp, host
-			if len(values) == len(cpuFieldNames) {
-				// fmt.Printf("The tags for host %v is %v\n", host, HostTags[host])
-
-				appendRow(proc.arrowRecordBuilder, values)
-			} else if len(values) == 12 {
-				// TODO(niebayes): 事先创建好每个 tag 列的一批次的 array。然后使用 arrow record builder 的批量 Append 接口去提高性能。
-				host := values[1]
-				appendRowWithTags(proc.arrowRecordBuilder, HostTags[host], values)
+			// Skip incomplete rows.
+			if len(values) != len(cpuFieldNames) {
+				continue
 			}
+			appendRow(proc.arrowRecordBuilder, values)
 		}
 
 		if len(segment) > 0 {
@@ -177,31 +171,6 @@ func appendRow(arrowRecordBuilder *array.RecordBuilder, values []string) {
 		} else {
 			appendFieldValue(fieldBuilder, value)
 		}
-	}
-}
-
-func appendRowWithTags(arrowRecordBuilder *array.RecordBuilder, tags []string, values []string) {
-	// fmt.Printf("appendRowWithTags. tags: %v, values: %v\n", tags, values)
-
-	appendField(arrowRecordBuilder, 0, values[0])
-
-	offset := 1
-	for i, v := range tags {
-		appendField(arrowRecordBuilder, i+offset, v)
-	}
-
-	offset += len(tags)
-	for i, v := range values[2:] {
-		appendField(arrowRecordBuilder, i+offset, v)
-	}
-}
-
-func appendField(arrowRecordBuilder *array.RecordBuilder, fieldIndex int, value string) {
-	fieldBuilder := arrowRecordBuilder.Field(fieldIndex)
-	if value == NULL {
-		fieldBuilder.AppendNull()
-	} else {
-		appendFieldValue(fieldBuilder, value)
 	}
 }
 

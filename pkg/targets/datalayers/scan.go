@@ -2,7 +2,6 @@ package datalayers
 
 import (
 	"fmt"
-	"strings"
 
 	// "log"
 
@@ -65,20 +64,6 @@ func NewDataSource(fileName string, numProcessors int64) targets.DataSource {
 	DataSourceFile = file
 	if DataSourceFile == nil {
 		panic("The DataSourceFile cannot be nil")
-	}
-
-	// Initializes the hostTags map.
-	HostTags = make(map[string][]string)
-
-	tagFileName := strings.Replace(fileName, ".data", ".tag", 1)
-	content, err := os.ReadFile(tagFileName)
-	if err != nil {
-		panic(fmt.Sprintf("failed to read the tag file %v. error: %v", tagFileName, err))
-	}
-	lines := strings.Split(string(content), "\n")
-	for _, line := range lines {
-		tokens := strings.Split(line, " ")
-		HostTags[tokens[0]] = tokens[1:]
 	}
 
 	return &dataSource{cursor: 0, subFiles: subFiles}

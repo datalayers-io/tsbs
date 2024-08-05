@@ -57,5 +57,5 @@ func TestDatalayersSerializerSerialize(t *testing.T) {
 		},
 	}
 
-	serialize.SerializerTest(t, cases, &Serializer{knownHosts: make(map[string]bool)})
+	serialize.SerializerTest(t, cases, &Serializer{})
 }
