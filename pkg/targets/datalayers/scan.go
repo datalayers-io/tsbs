@@ -2,13 +2,11 @@ package datalayers
 
 import (
 	"fmt"
-	"sync"
-	"time"
+	"strings"
 
 	// "log"
 
 	"os"
-	"strings"
 
 	// "time"
 
@@ -16,6 +14,9 @@ import (
 	"github.com/timescale/tsbs/pkg/data/usecases/common"
 	"github.com/timescale/tsbs/pkg/targets"
 )
+
+var DataSourceFile *os.File = nil
+var HostTags map[string][]string
 
 // This file contains stuff used by the scanner.
 // When the scanner starts, it spawns a collection of workers.
@@ -27,96 +28,75 @@ import (
 // To determine which channel should a data point go to, we use the point indexer to
 // set the index of channels for each data point and send the data point to the corresponding channel.
 
-type dataSegment struct {
-	data []string
-}
-
 type dataSource struct {
-	lines  []string
-	cursor int
+	subFiles [][]int64
+	cursor   int
 }
 
-func parallelReadFile(fileName string) []byte {
-	numReaders := int64(4)
-
+// Creates a new file data source.
+func NewDataSource(fileName string, numProcessors int64) targets.DataSource {
 	file, err := os.Open(fileName)
 	if err != nil {
 		panic(fmt.Sprintf("failed to open file %v. error: %v", fileName, err))
 	}
-	defer file.Close()
 
 	fileInfo, err := file.Stat()
 	if err != nil {
 		panic(fmt.Sprintf("failed to get file info. error: %v", err))
 	}
 	fileSize := fileInfo.Size()
+	// fmt.Printf("The file size is %v\n", fileSize)
 
-	chunkSize := (fileSize + numReaders - 1) / numReaders
+	chunkSize := (fileSize + numProcessors - 1) / numProcessors
+	// fmt.Printf("The chunk size is %v\n", chunkSize)
 
-	var wg sync.WaitGroup
-	buffers := make([][]byte, numReaders)
-	for i := int64(0); i < numReaders; i++ {
-		wg.Add(1)
-		go func(i int64) {
-			defer wg.Done()
-			startOffset := i * chunkSize
-			endOffset := min(startOffset+chunkSize, fileSize)
+	subFiles := make([][]int64, 0, numProcessors)
+	for i := int64(0); i < numProcessors; i++ {
+		startOffset := i * chunkSize
+		endOffset := min(startOffset+chunkSize, fileSize)
 
-			buffer := make([]byte, endOffset-startOffset)
-			_, err := file.ReadAt(buffer, startOffset)
-			if err != nil {
-				panic(fmt.Sprintf("failed to read file at offset %d. error: %v", startOffset, err))
-			}
-			buffers[i] = buffer
-		}(i)
+		// fmt.Printf("The range of chunk %v is [%v,%v)\n", i, startOffset, endOffset)
+
+		subFiles = append(subFiles, []int64{startOffset, endOffset})
 	}
-	wg.Wait()
 
-	var flatBuffer []byte
-	for _, buffer := range buffers {
-		flatBuffer = append(flatBuffer, buffer...)
+	fmt.Printf("Create %v sub files each of at most length %v for %v processors\n", len(subFiles), chunkSize, numProcessors)
+
+	DataSourceFile = file
+	if DataSourceFile == nil {
+		panic("The DataSourceFile cannot be nil")
 	}
-	return flatBuffer
-}
 
-// Creates a new file data source.
-// TODO(niebayes): 唯一的生产者线程应该做尽可能轻量化的任务。因为消费者线程数是可调的，所以应该把一些可能的工作交给消费者去处理。
-func NewDataSource(fileName string) targets.DataSource {
-	// TODO(niebayes): 使用多个 go routines 去读取这个文件以加快准备数据的速度。
-	// data, err := os.ReadFile(fileName)
-	// if err != nil {
-	// 	panic(fmt.Sprintf("failed to read file %v. error: %v", fileName, err))
-	// }
-	start := time.Now()
-	// data := parallelReadFile(fileName)
-	data, err := os.ReadFile(fileName)
+	// Initializes the hostTags map.
+	HostTags = make(map[string][]string)
+
+	tagFileName := strings.Replace(fileName, ".data", ".tag", 1)
+	content, err := os.ReadFile(tagFileName)
 	if err != nil {
-		panic(fmt.Sprintf("failed to read file %v. error: %v", fileName, err))
+		panic(fmt.Sprintf("failed to read the tag file %v. error: %v", tagFileName, err))
 	}
-	elapsed := time.Since(start).Milliseconds()
-	fmt.Printf("Reading file costs %v ms\n", elapsed)
+	lines := strings.Split(string(content), "\n")
+	for _, line := range lines {
+		tokens := strings.Split(line, " ")
+		HostTags[tokens[0]] = tokens[1:]
+	}
 
-	lines := strings.Split(string(data), "\n")
-	return &dataSource{lines: lines, cursor: 0}
+	return &dataSource{cursor: 0, subFiles: subFiles}
 }
 
 // Retrieves the next item from the data source.
 // An item only contains a single data point for Datalayers.
-// TODO(niebayes): 修改生产者-消费者分发的逻辑。生产者预先将所有数据按消费者数量去切分，然后通过 round-robin 的 GetIndex 以及 NextItem，
-// 一次性将每个消费者应该消费的数据一次性交给他们，然后生产者的任务就结束了，消费者各自为战。虽然实时的写入速度不好看，但是最终的写入速度应该有提升。
 func (ds *dataSource) NextItem() data.LoadedPoint {
-	if ds.cursor >= len(ds.lines) {
+	if ds.cursor >= len(ds.subFiles) {
 		return data.LoadedPoint{}
 	}
+	subFile := ds.subFiles[ds.cursor]
 
-	segmentSize := 100
-	start := ds.cursor
-	end := min(len(ds.lines), ds.cursor+segmentSize)
-	segment := ds.lines[start:end]
-	ds.cursor += segmentSize
+	// fmt.Printf("Produce a subFile item = %v\n", subFile)
 
-	dataSegment := dataSegment{data: segment}
-	return data.LoadedPoint{Data: dataSegment}
+	ds.cursor += 1
+
+	return data.LoadedPoint{Data: subFile}
 }
 
 // Gets the headers of the data source. Not used by Datalayers.
@@ -133,6 +113,7 @@ type pointIndexer struct {
 
 // Creates a new point indexer.
 func NewPointIndexer(maxPartitions uint) targets.PointIndexer {
+	// fmt.Printf("Create a point indexer with maxPartitions = %v\n", maxPartitions)
 	return &pointIndexer{cursor: 0, maxPartitions: maxPartitions}
 }
 
@@ -147,45 +128,31 @@ func (indexer *pointIndexer) GetIndex(_ data.LoadedPoint) uint {
 // It needs to have a way to measure it's size to make sure
 // it does not get too large and it needs a way to append a point
 type batch struct {
-	dataSegments []dataSegment
+	subFile []int64
 }
 
 // Gets the current length of the batch.
 // For Datalayers, the length is the number of data points currently stored in the batch.
 func (b *batch) Len() uint {
-	return uint(len(b.dataSegments))
+	return 1
 }
 
 // Appends a data point to the batch.
 func (b *batch) Append(loadedPoint data.LoadedPoint) {
-	dataSegment := loadedPoint.Data.(dataSegment)
-	b.dataSegments = append(b.dataSegments, dataSegment)
+	subFile := loadedPoint.Data.([]int64)
+	b.subFile = subFile
 }
 
 // BatchFactory returns a new empty batch for storing points.
 type batchFactory struct {
-	capacity  uint
-	batchPool *sync.Pool
 }
 
 // Creates a new batch factory.
-func NewBatchFactory(capacity uint, batchPool *sync.Pool) targets.BatchFactory {
-	batchCapacity = capacity
-	return &batchFactory{capacity, batchPool}
+func NewBatchFactory() targets.BatchFactory {
+	return &batchFactory{}
 }
 
 // New returns a new Batch to add Points to
 func (bf *batchFactory) New() targets.Batch {
-	batch := bf.batchPool.Get().(*batch)
-	batch.dataSegments = batch.dataSegments[:0]
-	return batch
-}
-
-var batchCapacity uint = 100
-var batchPool = sync.Pool{
-	New: func() interface{} {
-		return &batch{
-			dataSegments: make([]dataSegment, 0, batchCapacity),
-		}
-	},
+	return &batch{}
 }

@@ -18,10 +18,10 @@ TARGET_DB=$1
 generate_data_for_db() {
   local db=$1
   generate_data $db cpu-only 100 31d $SEED  
-  generate_data $db cpu-only 4000 4d $SEED
-  generate_data $db cpu-only 100000 3h $SEED
-  generate_data $db cpu-only 1000000 3m $SEED
-  generate_data $db cpu-only 10000000 3m $SEED
+  # generate_data $db cpu-only 4000 4d $SEED
+  # generate_data $db cpu-only 100000 3h $SEED
+  # generate_data $db cpu-only 1000000 3m $SEED
+  # generate_data $db cpu-only 10000000 3m $SEED
 }
 
 # 根据参数决定为哪些数据库生成数据

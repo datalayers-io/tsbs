@@ -140,11 +140,42 @@ func (d *Devops) MaxAllCPU(q query.Query, nHosts int, duration time.Duration) {
 
 // LastPointPerHost finds the last row for every host in the dataset
 func (d *Devops) LastPointPerHost(q query.Query) {
-	sql := `SELECT * 
+	sql := `WITH ranked_cpu AS (
+		SELECT *, ROW_NUMBER() OVER (PARTITION BY hostname ORDER BY ts DESC) as row_num 
 		FROM cpu 
-		GROUP BY hostname 
-		ORDER BY ts DESC 
-		LIMIT 1`
+		) 
+		SELECT * 
+		FROM ranked_cpu 
+		WHERE row_num = 1`
+
+	// sql := `SELECT 
+	// 	t1.hostname, 
+	// 	t1.ts, 
+	// 	t1.region, 
+	// 	t1.datacenter, 
+	// 	t1.rack, 
+	// 	t1.os, 
+	// 	t1.arch, 
+	// 	t1.team, 
+	// 	t1.service, 
+	// 	t1.service_version, 
+	// 	t1.service_environment ,
+	// 	t1.usage_user          ,
+	// 	t1.usage_system        ,
+	// 	t1.usage_idle          ,
+	// 	t1.usage_nice          ,
+	// 	t1.usage_iowait        ,
+	// 	t1.usage_irq           ,
+	// 	t1.usage_softirq       ,
+	// 	t1.usage_steal         ,
+	// 	t1.usage_guest         ,
+	// 	t1.usage_guest_nice
+	// 	FROM cpu t1
+	// 	JOIN (
+	// 		SELECT hostname, MAX(ts) AS max_ts
+	// 		FROM cpu
+	// 		GROUP BY hostname
+	// 	) t2 ON t1.hostname = t2.hostname AND t1.ts = t2.max_ts`
 
 	humanLabel := "Datalayers last row per host"
 	humanDesc := humanLabel

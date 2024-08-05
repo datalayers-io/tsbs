@@ -1,6 +1,7 @@
 package load
 
 import (
+	// "fmt"
 	"reflect"
 
 	"github.com/timescale/tsbs/pkg/targets"
@@ -114,9 +115,11 @@ func scanWithFlowControl(
 
 		// Prepare new batch - decode new item and append it to batch
 		item := ds.NextItem()
+		// fmt.Printf("Read the %v-th item\n", itemsRead)
 		if item.Data == nil {
 			// Nothing to scan any more - input is empty or failed
 			// Time to exit
+			// fmt.Printf("The %v-th item is nil, terminate scanning\n", itemsRead)
 			break
 		}
 		itemsRead++
@@ -124,6 +127,8 @@ func scanWithFlowControl(
 		// Append new item to batch
 		idx := indexer.GetIndex(item)
 		fillingBatches[idx].Append(item)
+
+		// fmt.Printf("Dispatch an item to processor %v\n", idx)
 
 		if fillingBatches[idx].Len() >= batchSize {
 			// Batch is full (contains at least batchSize items) - ready to be sent to worker,

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/timescale/tsbs/pkg/targets"
+	"github.com/timescale/tsbs/pkg/targets/datalayers"
 
 	"github.com/spf13/pflag"
 	"github.com/timescale/tsbs/load/insertstrategy"
@@ -182,7 +183,6 @@ func (l *CommonBenchmarkRunner) saveTestResult(took time.Duration, start time.Ti
 // RunBenchmark takes in a Benchmark b and uses it to run the load benchmark
 func (l *CommonBenchmarkRunner) RunBenchmark(b targets.Benchmark) {
 	wg, start := l.preRun(b)
-	// TODO(niebayes): try to improve the performace by setting the channel capacity to different values.
 	var numChannels, capacity uint
 	if l.HashWorkers {
 		numChannels = l.Workers
@@ -207,6 +207,8 @@ func (l *CommonBenchmarkRunner) RunBenchmark(b targets.Benchmark) {
 	for _, c := range channels {
 		c.close()
 	}
+
+	_ = datalayers.DataSourceFile.Close()
 
 	l.postRun(wg, start)
 }

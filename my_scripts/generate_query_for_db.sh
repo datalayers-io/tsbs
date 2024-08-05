@@ -1,6 +1,7 @@
 #!/bin/bash
 
 SEED=42
+NUM_QUERIES=1000
 
 generate_query() {
   ./my_scripts/generate_query.sh "$@"
@@ -36,12 +37,12 @@ QUERY_TYPES=(
 # 定义函数来生成查询
 generate_query_for_db() {
   local db=$1
-  for query_type in "${QUERY_TYPES[@]}"; do
-    generate_query $db cpu-only 100 31d $SEED $query_type 
-    generate_query $db cpu-only 4000 4d $SEED $query_type
-    generate_query $db cpu-only 100000 3h $SEED $query_type
-    generate_query $db cpu-only 1000000 3m $SEED $query_type
-    generate_query $db cpu-only 10000000 3m $SEED $query_type
+  for QUERY_TYPE in "${QUERY_TYPES[@]}"; do
+    generate_query $db cpu-only 100 31d $QUERY_TYPE $NUM_QUERIES $SEED  
+    generate_query $db cpu-only 4000 4d $QUERY_TYPE $NUM_QUERIES $SEED 
+    # generate_query $db cpu-only 100000 3h $QUERY_TYPE $NUM_QUERIES $SEED 
+    # generate_query $db cpu-only 1000000 3m $QUERY_TYPE $NUM_QUERIES $SEED 
+    # generate_query $db cpu-only 10000000 3m $QUERY_TYPE $NUM_QUERIES $SEED 
   done
 }
 

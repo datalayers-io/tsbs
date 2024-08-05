@@ -12,6 +12,7 @@ import (
 type DatalayersConfig struct {
 	SqlEndpoint string `yaml:"sql-endpoint" mapstructure:"sql-endpoint"`
 	BatchSize   uint   `yaml:"batch-size" mapstructure:"batch-size"`
+	NumWorkers  int64  `yaml:"num-workers" mapstructure:"num-workers"`
 }
 
 // Wraps the context used during a benchmark.
@@ -44,12 +45,12 @@ func NewBenchmark(targetDB string, dataSourceConfig *source.DataSourceConfig, da
 
 // GetDataSource returns the DataSource to use for this Benchmark
 func (b *benchmark) GetDataSource() targets.DataSource {
-	return NewDataSource(b.dataSourceConfig.File.Location)
+	return NewDataSource(b.dataSourceConfig.File.Location, b.datalayersConfig.NumWorkers)
 }
 
 // GetBatchFactory returns the BatchFactory to use for this Benchmark
 func (b *benchmark) GetBatchFactory() targets.BatchFactory {
-	return NewBatchFactory(b.datalayersConfig.BatchSize, &batchPool)
+	return NewBatchFactory()
 }
 
 // GetPointIndexer returns the PointIndexer to use for this Benchmark
@@ -59,7 +60,7 @@ func (b *benchmark) GetPointIndexer(maxPartitions uint) targets.PointIndexer {
 
 // GetProcessor returns the Processor to use for this Benchmark
 func (b *benchmark) GetProcessor() targets.Processor {
-	return NewProcessor(b.datalayersClient, b.targetDB, &batchPool, int(b.datalayersConfig.BatchSize))
+	return NewProcessor(b.datalayersClient, b.targetDB, int(b.datalayersConfig.BatchSize), b.dataSourceConfig.File.Location)
 }
 
 // GetDBCreator returns the DBCreator to use for this Benchmark

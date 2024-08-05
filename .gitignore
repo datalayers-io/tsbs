@@ -10,5 +10,6 @@ bin
 # High Dynamic Range (HDR) Histogram files
 *.hdr
 
-# Generated benchmark data
+# Generated benchmark data and tags
 *.data
+*.tag

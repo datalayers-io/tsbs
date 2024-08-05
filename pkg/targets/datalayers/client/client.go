@@ -111,8 +111,8 @@ func (clt *Client) ExecuteInsertPrepare(preparedStatement *flightsql.PreparedSta
 	}
 	return clt.doGetWithFlightInfo(flightInfo)
 
-	// TODO(niebayes): using ExecuteUpdate may be helpful for improving performance.
-	// affectedRows, err := preparedStatement.ExecuteUpdate(clt.ctx)
+	// FIXME(niebayes): the ExecuteUpdate works but its performance is however slightly lower than the general Execute.
+	// _, err := preparedStatement.ExecuteUpdate(clt.ctx)
 	// if err != nil {
 	// 	return err
 	// }
@@ -139,6 +139,7 @@ func (clt *Client) doGetWithFlightInfo(flightInfo *flight.FlightInfo) error {
 	return nil
 }
 
+// TODO(niebayes): use direct query to improve performance.
 func (clt *Client) ExecuteQuery(query string, doPrintResponses bool) error {
 	log.Debugf("Execute Query: %v", query)
 
