@@ -1,10 +1,6 @@
 package datalayers
 
 import (
-	"bufio"
-	"fmt"
-	"os"
-
 	"github.com/blagojts/viper"
 	"github.com/spf13/pflag"
 	"github.com/timescale/tsbs/pkg/data/serialize"
@@ -30,14 +26,7 @@ func (t *datalayersTarget) TargetName() string {
 }
 
 func (t *datalayersTarget) Serializer() serialize.PointSerializer {
-	// TODO(niebayes): make the tag filename can be read from the env vars.
-	filename := "./data/datalayers/tmp/cpu-only-100-31d.tag"
-	file, err := os.Create(filename)
-	if err != nil {
-		panic(fmt.Sprintf("cannot open file for write %s: %v", filename, err))
-	}
-	tagWriter := bufio.NewWriterSize(file, 4<<20)
-	return &Serializer{knownHosts: make(map[string]bool), tagWriter: tagWriter}
+	return &Serializer{}
 }
 
 func (t *datalayersTarget) Benchmark(targetDB string, dataSourceConfig *source.DataSourceConfig, dbSpecificViper *viper.Viper) (targets.Benchmark, error) {
