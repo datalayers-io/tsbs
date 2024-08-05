@@ -243,7 +243,13 @@ func TestMaxAllCPU(t *testing.T) {
 func TestLastPointPerHost(t *testing.T) {
 	expectedHumanLabel := "Datalayers last row per host"
 	expectedHumanDesc := "Datalayers last row per host"
-	expectedSQLQuery := "SELECT * FROM cpu GROUP BY hostname ORDER BY ts DESC LIMIT 1"
+	expectedSQLQuery := `WITH ranked_cpu AS (
+		SELECT *, ROW_NUMBER() OVER (PARTITION BY hostname ORDER BY ts DESC) as row_num 
+		FROM cpu
+		) 
+		SELECT * 
+		FROM ranked_cpu 
+		WHERE row_num = 1`
 
 	rand.Seed(123) // Setting seed for testing purposes.
 

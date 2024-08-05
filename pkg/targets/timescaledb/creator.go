@@ -198,7 +198,8 @@ func (d *dbCreator) createTableAndIndexes(dbBench *sql.DB, tableName string, fie
 		var creationCommand string = "create_hypertable"
 		var partitionsOption string = "replication_factor => NULL"
 
-		MustExec(dbBench, "CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE")
+		// MustExec(dbBench, "CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE")
+		MustExec(dbBench, "CREATE EXTENSION IF NOT EXISTS timescaledb WITH VERSION '2.6.1' CASCADE;")
 
 		// Replication factor determines whether we create a distributed hypertable
 		// or not. If it is unset or zero, then we will create a regular

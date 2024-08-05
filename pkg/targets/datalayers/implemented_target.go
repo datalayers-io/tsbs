@@ -1,6 +1,10 @@
 package datalayers
 
 import (
+	"bufio"
+	"fmt"
+	"os"
+
 	"github.com/blagojts/viper"
 	"github.com/spf13/pflag"
 	"github.com/timescale/tsbs/pkg/data/serialize"
@@ -17,9 +21,8 @@ func NewTarget() targets.ImplementedTarget {
 
 func (t *datalayersTarget) TargetSpecificFlags(flagPrefix string, flagSet *pflag.FlagSet) {
 	flagSet.String(flagPrefix+"sql-endpoint", "127.0.0.1:8360", "Datalayers' Arrow FlightSql endpoint")
-	flagSet.Uint(flagPrefix+"batch-size", 5000, "The capacity of each batch. Should be identical with the runner's batch size configuraiton")
-	flagSet.Uint(flagPrefix+"partition-num", 16, "The number of partitions for each table")
-	flagSet.StringArray(flagPrefix+"partition-by-fields", []string{}, "The partition by fields for each table")
+	flagSet.Uint(flagPrefix+"batch-size", 1250, "The number of rows being sent to the Datalayers server in a row")
+	flagSet.Uint(flagPrefix+"num-workers", 32, "The number of processors")
 }
 
 func (t *datalayersTarget) TargetName() string {
@@ -27,7 +30,14 @@ func (t *datalayersTarget) TargetName() string {
 }
 
 func (t *datalayersTarget) Serializer() serialize.PointSerializer {
-	return &Serializer{}
+	// TODO(niebayes): make the tag filename can be read from the env vars.
+	filename := "./data/datalayers/tmp/cpu-only-100-31d.tag"
+	file, err := os.Create(filename)
+	if err != nil {
+		panic(fmt.Sprintf("cannot open file for write %s: %v", filename, err))
+	}
+	tagWriter := bufio.NewWriterSize(file, 4<<20)
+	return &Serializer{knownHosts: make(map[string]bool), tagWriter: tagWriter}
 }
 
 func (t *datalayersTarget) Benchmark(targetDB string, dataSourceConfig *source.DataSourceConfig, dbSpecificViper *viper.Viper) (targets.Benchmark, error) {

@@ -1,0 +1,24 @@
+data-source:
+  type: FILE
+  file:
+    location: ./data/datalayers/cpu-only-4000-4d.data
+loader:
+  db-specific:
+    sql-endpoint: 10.0.0.10:8360
+    batch-size: "10000"
+    num-workers: "64"
+  runner:
+    workers: "64"
+    batch-size: "15"
+    flow-control: true
+    hash-workers: true
+    insert-intervals: ""
+    limit: "0"
+    reporting-period: 10s
+    seed: 42
+    channel-capacity: "0"
+    db-name: benchmark
+    do-abort-on-exist: false
+    do-create-db: true
+    do-load: true
+  target: datalayers

@@ -10,7 +10,8 @@ GOFMT=$(GOCMD) fmt
 
 .PHONY: all generators loaders runners lint fmt checkfmt
 
-all: generators loaders runners
+all: generators loaders
+# all: generators loaders runners
 
 test_prepare: test_prepare
 	go build -gcflags "all=-N -l" ./cmd/tsbs_test_prepare
@@ -18,7 +19,9 @@ test_prepare: test_prepare
 generators: tsbs_generate_data \
 			tsbs_generate_queries
 
-loaders: tsbs_load
+loaders: tsbs_load \
+		 tsbs_load_influx \
+		 tsbs_load_timescaledb
 
 runners: tsbs_run_queries_influx \
 		 tsbs_run_queries_timescaledb \
