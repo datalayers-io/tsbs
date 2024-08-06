@@ -1,7 +1,7 @@
 data-source:
   type: FILE
   file:
-    location: ./data/datalayers/cpu-only-10000000-3m.data
+    location: ./generated_data/datalayers/cpu-only-10000000-3m.data
 loader:
   db-specific:
     sql-endpoint: 10.0.0.10:8360

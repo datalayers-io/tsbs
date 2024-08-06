@@ -40,9 +40,6 @@ generate_query_for_db() {
   for QUERY_TYPE in "${QUERY_TYPES[@]}"; do
     generate_query $db cpu-only 100 31d $QUERY_TYPE $NUM_QUERIES $SEED  
     generate_query $db cpu-only 4000 4d $QUERY_TYPE $NUM_QUERIES $SEED 
-    # generate_query $db cpu-only 100000 3h $QUERY_TYPE $NUM_QUERIES $SEED 
-    # generate_query $db cpu-only 1000000 3m $QUERY_TYPE $NUM_QUERIES $SEED 
-    # generate_query $db cpu-only 10000000 3m $QUERY_TYPE $NUM_QUERIES $SEED 
   done
 }
 

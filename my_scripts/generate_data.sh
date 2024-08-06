@@ -27,7 +27,7 @@ case $DURATION in
         ;;
 esac
 
-OUT="./data/$FORMAT/$USE_CASE-$SCALE-$DURATION.data"
+OUT="./generated_data/$FORMAT/$USE_CASE-$SCALE-$DURATION.data"
 
 # 提取目录路径
 OUT_DIR=$(dirname "$OUT")

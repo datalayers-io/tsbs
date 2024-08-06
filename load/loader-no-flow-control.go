@@ -15,7 +15,6 @@ type noFlowBenchmarkRunner struct {
 func (l *noFlowBenchmarkRunner) RunBenchmark(b targets.Benchmark) {
 	wg, start := l.preRun(b)
 
-	// TODO(niebayes): also try to config runner for no-flow-control benchmarker.
 	var numChannels uint
 	if l.HashWorkers {
 		numChannels = l.Workers

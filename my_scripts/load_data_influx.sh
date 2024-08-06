@@ -27,14 +27,7 @@ case $SCENARIO in
     ;;
 esac
 
-FILE_WITHOUT_EXTENSION=$(echo $FILE | sed 's/\.data.*//')
-RESULTS_FILE="./load_results/influx/$FILE_WITHOUT_EXTENSION.json"
-FILE="./data/influx/$FILE"
-
-RESULTS_DIR=$(dirname $RESULTS_FILE)
-if [ ! -d "$RESULTS_DIR" ]; then
-  mkdir -p "$RESULTS_DIR"
-fi
+FILE="./generated_data/influx/$FILE"
 
 ./bin/tsbs_load_influx \
     --batch-size=$BATCH_SIZE \
@@ -42,5 +35,4 @@ fi
     --hash-workers=true \
     --seed=42 \
     --file=$FILE \
-    --results-file=$RESULTS_FILE \
     --urls="http://10.0.0.10:8086"

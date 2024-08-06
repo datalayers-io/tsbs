@@ -123,8 +123,8 @@ func TestDevopsGroupByTime(t *testing.T) {
 	expectedSQLQuery := `SELECT date_trunc('minute', ts) AS minute, 
         max(usage_user)
         FROM cpu
-        WHERE hostname IN ('host_9') 
-		AND ts >= '1970-01-01T00:05:58Z' AND ts < '1970-01-01T00:05:59Z'
+        WHERE hostname IN ('host_0') 
+		AND ts >= '2016-01-01T00:00:00Z' AND ts < '2016-01-04T00:00:01Z'
         GROUP BY minute 
 		ORDER BY minute ASC`
 
