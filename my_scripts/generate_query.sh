@@ -43,7 +43,7 @@ case $SCALE in
     ;;
 esac
 
-OUT="./query/$FORMAT/$USE_CASE/$QUERY_SIZE/$QUERY_TYPE.query"
+OUT="./generated_query/$FORMAT/$USE_CASE/$QUERY_SIZE/$QUERY_TYPE.query"
 
 # 提取目录路径
 OUT_DIR=$(dirname "$OUT")

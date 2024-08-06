@@ -93,7 +93,6 @@ func GetBenchmarkRunner(c BenchmarkRunnerConfig) BenchmarkRunner {
 
 	loader.initialRand = rand.New(rand.NewSource(loader.Seed))
 
-	// TODO(niebayes): the sleep regulator may be helpful for balancing load on workers, so that the overall performance can be improved.
 	var err error
 	if c.InsertIntervals == "" {
 		loader.sleepRegulator = insertstrategy.NoWait()

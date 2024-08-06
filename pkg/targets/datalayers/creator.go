@@ -26,7 +26,6 @@ func (dc *dBCreator) Init() {
 	// Not implemented.
 }
 
-// TODO(niebayes): implement more methods for db creator.
 // DBExists checks if a database with the given name currently exists.
 func (dc *dBCreator) DBExists(dbName string) bool {
 	// Not implemented.

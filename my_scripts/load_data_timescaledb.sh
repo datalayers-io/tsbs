@@ -1,7 +1,5 @@
 #!/bin/bash
 
-#!/bin/bash
-
 SCENARIO=$1
 WORKERS=$2
 BATCH_SIZE=$3
@@ -30,14 +28,7 @@ case $SCENARIO in
     ;;
 esac
 
-FILE_WITHOUT_EXTENSION=$(echo $FILE | sed 's/\.data.*//')
-RESULTS_FILE="./load_results/timescaledb/$FILE_WITHOUT_EXTENSION.json"
-FILE="./data/timescaledb/$FILE"
-
-RESULTS_DIR=$(dirname $RESULTS_FILE)
-if [ ! -d "$RESULTS_DIR" ]; then
-  mkdir -p "$RESULTS_DIR"
-fi
+FILE="./generated_data/timescaledb/$FILE"
 
 ./bin/tsbs_load_timescaledb \
     --host="10.0.0.10" \
@@ -49,5 +40,4 @@ fi
     --batch-size=$BATCH_SIZE \
     --chunk-time=$CHUNK_TIME \
     --hash-workers=false \
-    --file=$FILE \
-    --results-file=$RESULTS_FILE
+    --file=$FILE

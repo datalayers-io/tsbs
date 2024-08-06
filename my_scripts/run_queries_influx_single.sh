@@ -4,17 +4,9 @@ SCENARIO=$1
 QUERY_TYPE=$2
 WORKERS=$3
 
-QUERY_FILE="./query/influx/cpu-only/$SCENARIO/$QUERY_TYPE.query"
-MIDDLE_PATH=$(echo "$QUERY_FILE" | sed 's|^\./query/\(.*\)\.query$|\1|')
-RESULTS_FILE="./query_results/$MIDDLE_PATH.json"
-
-RESULTS_DIR=$(dirname $RESULTS_FILE)
-if [ ! -d "$RESULTS_DIR" ]; then
-  mkdir -p "$RESULTS_DIR"
-fi
+QUERY_FILE="./generated_query/influx/cpu-only/$SCENARIO/$QUERY_TYPE.query"
 
 ./bin/tsbs_run_queries_influx \
     --file="$QUERY_FILE" \
-    --results-file="$RESULTS_FILE" \
     --urls="http://10.0.0.10:8086" \
     --workers=$WORKERS 

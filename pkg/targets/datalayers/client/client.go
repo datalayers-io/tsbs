@@ -26,7 +26,6 @@ func NewClient(sqlEndpoint string) (*Client, error) {
 	var grpcDialOpts = []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	}
-	// TODO(niebayes): maybe some grpc dial options are helpful for improving performance.
 	flightSqlClient, err := flightsql.NewClient(sqlEndpoint, nil, nil, grpcDialOpts...)
 	if err != nil {
 		return nil, err
@@ -152,16 +151,6 @@ func (clt *Client) ExecuteQuery(query string, doPrintResponses bool) error {
 	if err != nil {
 		panic(err)
 	}
-
-	// flightInfo, err := clt.inner.Execute(clt.ctx, query)
-	// if err != nil {
-	// 	panic(err)
-	// }
-
-	// flightReader, err := clt.inner.DoGet(clt.ctx, flightInfo.GetEndpoint()[0].GetTicket())
-	// if err != nil {
-	// 	panic(err)
-	// }
 
 	for flightReader.Next() {
 		record := flightReader.Record()

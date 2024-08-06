@@ -24,5 +24,4 @@ case $SCENARIO in
     ;;
 esac
 
-# FIXME(niebayes): figure out why writing in some scenarios fails.
 ./bin/tsbs_load load datalayers --config=./load_config/datalayers/$CONFIG_FILE
