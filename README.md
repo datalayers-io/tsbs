@@ -1,194 +1,446 @@
-该仓库是 Datalayers TSBS 项目，修改自 `timescale/tsbs` 项目。
+Datalayers' fork of TSBS
 ---
 
-# TSBS 压测对象
-TODO
-bulk load
-query
-non-parallel
+# Time Series Benchmark Suite (TSBS)
+This repo contains code for benchmarking several time series databases,
+including TimescaleDB, MongoDB, InfluxDB, CrateDB and Cassandra.
+This code is based on a fork of work initially made public by InfluxDB
+at https://github.com/influxdata/influxdb-comparisons.
 
-# 编译
-执行 `make` 编译所有必需的 binaries。编译好的 binaries 会存放在项目根目录的 `bin` 目录下。
+Current databases supported:
 
-# 生成压测数据
-使用 TSBS 的模拟算法，生成不同模拟场景的压测数据。这些压测数据会用于写入压测，以及查询压测。
-TSBS 提供统一的模拟算法，但是所生成的数据如何序列化，需要每个数据库自己定义。Datalayers 实现了自定义的序列化算法，具体请察看源码 `pkg/targets/datalayers/serializer.go`。
++ Akumuli [(supplemental docs)](docs/akumuli.md)
++ Cassandra [(supplemental docs)](docs/cassandra.md)
++ ClickHouse [(supplemental docs)](docs/clickhouse.md)
++ CrateDB [(supplemental docs)](docs/cratedb.md)
++ InfluxDB [(supplemental docs)](docs/influx.md)
++ MongoDB [(supplemental docs)](docs/mongo.md)
++ QuestDB [(supplemental docs)](docs/questdb.md)
++ SiriDB [(supplemental docs)](docs/siridb.md)
++ TimescaleDB [(supplemental docs)](docs/timescaledb.md)
++ Timestream [(supplemental docs)](docs/timestream.md)
++ VictoriaMetrics [(supplemental docs)](docs/victoriametrics.md)
 
-TSBS 原生支持 5 个场景：
-- devops：模拟监控多个服务器（host）的场景。每个 host 有 cpu、memory、disk 等最多 9 个监控指标。每个 host 通过 hostname、region、rack 等 tags 标识。
-- cpu-only：这是 devops 场景的子集。每个 host 只有 cpu 一个监控指标。
-- cpu-single：这是 devops 场景的一个更小的子集。我们只监控一个 host，且只监控这个 host 的一个 cpu。
-- devops-generic：这是 devops 场景的超集。它额外提供一个 `max-metrics` 参数，用于控制每个 host 的监控指标的数量。这个场景可以用来测试高基数（high cardinality）场景的性能。
-- iot：模拟监控一个卡车公司的多台卡车的场景。每个卡车有一系列监控指标。与 devops 场景最大的区别是，由于现实中卡车可能离线，因此这个场景所生成的数据可能有乱序、丢失、空、突然大量数据等特征。
+## Overview
 
-为了与 TDEngine 等数据库对比，我们计划支持 cpu-only、devops、iot 三个场景。
+The **Time Series Benchmark Suite (TSBS)** is a collection of Go
+programs that are used to generate datasets and then benchmark read
+and write performance of various databases. The intent is to make the
+TSBS extensible so that a variety of use cases (e.g., devops, IoT,
+finance, etc.), query types, and databases can be included and benchmarked.
+To this end we hope to help prospective database administrators find the
+best database for their needs and their workloads. Further, if you
+are the developer of a time series database and want to include your
+database in the TSBS, feel free to open a pull request to add it!
 
-我们目前只支持 cpu-only、devops 两个场景，这是因为我们还无法处理 iot 场景存在的乱序数据。
+## Current use cases
 
-以下是生成各个场景的命令：
+Currently, TSBS supports two use cases.
 
-## cpu-only
-执行以下命令，会在项目根目录生成一个名为 `datalayers_cpu-only.data` 的文件。
-``` shell
-./bin/tsbs_generate_data \
-    --use-case="cpu-only" \
-    --seed=42 \
-    --scale=100 \
+### Dev ops
+A 'dev ops' use case, which comes in two forms. The full form is used to
+generate, insert, and measure data from 9 'systems' that could be monitored
+in a real world dev ops scenario (e.g., CPU, memory, disk, etc).
+Together, these 9 systems generate 100 metrics per reading interval.
+The alternate form focuses solely on CPU metrics for a simpler, more
+streamlined use case. This use case generates 10 CPU metrics per reading.
+
+In addition to metric readings, 'tags' (including the location
+of the host, its operating system, etc) are generated for each host
+with readings in the dataset. Each unique set of tags identifies
+one host in the dataset and the number of different hosts generated is
+defined by the `scale` flag (see below).
+
+### Internet of Things (IoT)
+The second use case is meant to simulate the data load in an IoT
+environment. This use case simulates data streaming from a set of trucks
+belonging to a fictional trucking company. This use case simulates
+diagnostic data and metrics from each truck, and introduces environmental
+factors such as out-of-order data and batch ingestion (for trucks
+that are offline for a period of time). It also tracks truck metadata
+and uses this to tie metrics and diagnostics together as part of the query
+set.  
+
+The queries that are generated as part of this use case will cover both real
+time truck status and analytics that will look at the time series data in
+an effort to be more predictive about truck behavior.  The scale factor with
+this use case will be based on the number of trucks tracked.  
+
+---
+
+Not all databases implement all use cases. This table below shows which use
+cases are implemented for each database:
+
+|Database|Dev ops|IoT|
+|:---|:---:|:---:|
+|Akumuli|X¹||
+|Cassandra|X||
+|ClickHouse|X||
+|CrateDB|X||
+|InfluxDB|X|X|
+|MongoDB|X|
+|QuestDB|X|X
+|SiriDB|X|
+|TimescaleDB|X|X|
+|Timestream|X||
+|VictoriaMetrics|X²||
+
+¹ Does not support the `groupby-orderby-limit` query
+² Does not support the `groupby-orderby-limit`, `lastpoint`, `high-cpu-1`, `high-cpu-all` queries
+
+## What the TSBS tests
+
+TSBS is used to benchmark bulk load performance and
+query execution performance. (It currently does not measure
+concurrent insert and query performance, which is a future priority.)
+To accomplish this in a fair way, the data to be inserted and the
+queries to run are pre-generated and native Go clients are used
+wherever possible to connect to each database (e.g., `mgo` for MongoDB, 
+`aws sdk` for Timestream).
+
+Although the data is randomly generated, TSBS data and queries are
+entirely deterministic. By supplying the same PRNG (pseudo-random number
+generator) seed to the generation programs, each database is loaded
+with identical data and queried using identical queries.
+
+## Installation
+
+TSBS is a collection of Go programs (with some auxiliary bash and Python
+scripts). The easiest way to get and install the Go programs is to use
+`go get` and then `make all` to install all binaries:
+```bash
+# Fetch TSBS and its dependencies
+$ go get github.com/timescale/tsbs
+$ cd $GOPATH/src/github.com/timescale/tsbs
+$ make
+```
+
+## How to use TSBS
+
+Using TSBS for benchmarking involves 3 phases: data and query
+generation, data loading/insertion, and query execution.
+
+### Data and query generation
+
+So that benchmarking results are not affected by generating data or
+queries on-the-fly, with TSBS you generate the data and queries you want
+to benchmark first, and then you can (re-)use it as input to the
+benchmarking phases.
+
+#### Data generation
+
+Variables needed:
+1. a use case. E.g., `iot` (choose from `cpu-only`, `devops`, or `iot`)
+1. a PRNG seed for deterministic generation. E.g., `123`
+1. the number of devices / trucks to generate for. E.g., `4000`
+1. a start time for the data's timestamps. E.g., `2016-01-01T00:00:00Z`
+1. an end time. E.g., `2016-01-04T00:00:00Z`
+1. how much time should be between each reading per device, in seconds. E.g., `10s`
+1. and which database(s) you want to generate for. E.g., `timescaledb`
+ (choose from `cassandra`, `clickhouse`, `cratedb`, `influx`, `mongo`, `questdb`, `siridb`,
+  `timescaledb` or `victoriametrics`)
+
+Given the above steps you can now generate a dataset (or multiple
+datasets, if you chose to generate for multiple databases) that can
+be used to benchmark data loading of the database(s) chosen using
+the `tsbs_generate_data` tool:
+```bash
+$ tsbs_generate_data --use-case="iot" --seed=123 --scale=4000 \
     --timestamp-start="2016-01-01T00:00:00Z" \
-    --timestamp-end="2016-01-01T06:00:00Z" \
-    --format="datalayers" \
-    --file="./datalayers_cpu-only.data"
+    --timestamp-end="2016-01-04T00:00:00Z" \
+    --log-interval="10s" --format="timescaledb" \
+    | gzip > /tmp/timescaledb-data.gz
+
+# Each additional database would be a separate call.
 ```
+_Note: We pipe the output to gzip to reduce on-disk space. This also requires
+you to pipe through gunzip when you run your tests._
 
-参数说明：
-- use-case：模拟场景，从 `cpu-only`、`devops`、`iot` 三者中选择一个。
-- seed：用于模拟算法。当我们对比多个数据库在同一个场景的性能时，我们应该在每次比较时，将 seed 设置为统一的 seed。
-- scale：设置不同的 host 的数量。两个 host，如果它们的 tag 不一样，那么就认为它们是不同的 host。
-- timestamp-start：从这个时间点开始生成模拟数据。时间是 UTC 时区。
-- timestamp-end：在这个时间点结束生成模拟数据。时间是 UTC 时区。
-- file：生成数据的存放路径与名称。
+The example above will generate a pseudo-CSV file that can be used to
+bulk load data into TimescaleDB. Each database has it's own format of how
+it stores the data to make it easiest for its corresponding loader to
+write data. The above configuration will generate just over 100M rows
+(1B metrics), which is usually a good starting point.
+Increasing the time period by a day will add an additional ~33M rows
+so that, e.g., 30 days would yield a billion rows (10B metrics)
 
-## devops
-``` shell
-./bin/tsbs_generate_data \
-    --use-case="devops" \
-    --seed=42 \
-    --scale=100 \
+##### IoT use case
+
+The main difference between the `iot` use case and other use cases is that
+it generates data which can contain out-of-order, missing, or empty
+entries to better represent real-life scenarios associated to the use case.
+Using a specified seed means that we can do this in a deterministic and
+reproducible way for multiple runs of data generation.
+
+#### Query generation
+
+Variables needed:
+1. the same use case, seed, # of devices, and start time as used in data generation
+1. an end time that is one second after the end time from data generation. E.g., for `2016-01-04T00:00:00Z` use `2016-01-04T00:00:01Z`
+1. the number of queries to generate. E.g., `1000`
+1. and the type of query you'd like to generate. E.g., `single-groupby-1-1-1` or `last-loc`
+
+For the last step there are numerous queries to choose from, which are
+listed in [Appendix I](#appendix-i-query-types). Additionally, the file
+`scripts/generate_queries.sh` contains a list of all of them as the
+default value for the environmental variable `QUERY_TYPES`. If you are
+generating more than one type of query, we recommend you use the
+helper script.
+
+For generating just one set of queries for a given type:
+```bash
+$ tsbs_generate_queries --use-case="iot" --seed=123 --scale=4000 \
     --timestamp-start="2016-01-01T00:00:00Z" \
-    --timestamp-end="2016-01-01T06:00:00Z" \
-    --format="datalayers" \
-    --file="./datalayers_devops.data"
+    --timestamp-end="2016-01-04T00:00:01Z" \
+    --queries=1000 --query-type="breakdown-frequency" --format="timescaledb" \
+    | gzip > /tmp/timescaledb-queries-breakdown-frequency.gz
+```
+_Note: We pipe the output to gzip to reduce on-disk space. This also requires
+you to pipe through gunzip when you run your tests._
+
+For generating sets of queries for multiple types:
+```bash
+$ FORMATS="timescaledb" SCALE=4000 SEED=123 \
+    TS_START="2016-01-01T00:00:00Z" \
+    TS_END="2016-01-04T00:00:01Z" \
+    QUERIES=1000 QUERY_TYPES="last-loc low-fuel avg-load" \
+    BULK_DATA_DIR="/tmp/bulk_queries" scripts/generate_queries.sh
 ```
 
-## iot
-TODO
+A full list of query types can be found in
+[Appendix I](#appendix-i-query-types) at the end of this README.
 
+### Benchmarking insert/write performance
 
-# 写入压测
-## 配置与写入有关的参数
-以下是 `cpu-only` 场景所使用的参数。实际上这里只是所有参数的子集，没有显式指定的参数都使用了 TSBS 提供的默认值。
-``` yaml
-data-source:
-  type: FILE
-  file:
-    location: ./datalayers_cpu-only.data
-loader:
-  db-specific:
-    sql-endpoint: 127.0.0.1:8360
-    batch-size: "5000"
-    partition-num: 16
-    partition-by-fields:
-        - "cpu:hostname,region,datacenter,rack"
-  runner:
-    batch-size: "5000"
-    channel-capacity: "0"
-    db-name: benchmark
-    do-abort-on-exist: false
-    do-create-db: true
-    do-load: true
-    flow-control: true
-    hash-workers: true
-    insert-intervals: ""
-    limit: "0"
-    reporting-period: 5s
-    seed: 42
-    workers: "8"
-  target: datalayers
+TSBS has two ways to benchmark insert/write performance:
+* On the fly simulation and load with `tsbs_load`
+* Pre-generate data to a file and load it either with `tsbs_load` or the
+db specific executables `tsbs_load_*`
+
+#### Using the unified `tsbs_load` executable
+
+The `tsbs_load` executable can load data in any of the supported databases.
+It can use a pregenerated data file as input, or simulate the data on the 
+fly. 
+
+You first start by generating a config yaml file populated with the default
+values for each property with:
+```shell script
+$ tsbs_load config --target=<db-name> --data-source=[FILE|SIMULATOR]
+```
+for example, to generate an example for TimescaleDB, loading the data from file
+```shell script
+$ tsbs_load config --target=timescaledb --data-source=FILE
+Wrote example config to: ./config.yaml
 ```
 
-关于 `data-source`、`loader.runner`、`loader.target` 中的参数的含义，可以执行命令 `./bin/tsbs_load load --help` 来察看。
-
-关于 `loader.db-specific` 中的参数的含义：
-- sql-endpoint：Datalayers 服务端 Arrow FlightSql 服务的监听端口。
-- batch-size：在写入链路上，存在一个用于攒批的 buffer。它的 max size 由 `loader.runner.batch-size` 来决定。但是创建这个 buffer 时，TSBS 默认创建一个 capacity = 0 的 buffer。另一方面，我们在创建 buffer 时，由于 TSBS 框架的限制，我们无法获取到 `loader.runner.batch-size` 这个参数。因此我们加入了这个参数，使得创建 buffer 时所设置的 capacity 与 max size 等同，以减少动态 re-allocate 带来的开销。你应该将 `loader.db-specific.batch-size` 与 `loader.runner.batch-size` 设置为一致的值。
-- partition-num：每个表的 partition 数量。
-- partition-by-fields：为每个表指定建表时使用的 `PARTITION BY` 列。这个参数接受一个 array of strings。每个 string 符合这样的格式：`<table name>:<field name>,<field name>,...`。 `table_name` 表示为哪个表指定 partition by 列，冒号后面的，是用逗号隔开的各个列的列名。
-
-### 执行写入
-执行以下命令以针对 `cpu-only` 场景进行写入压测。
-``` shell
-./bin/tsbs_load load datalayers --config=./load_config/cpu-only.yaml
+You can then run tsbs_load with the generated config file with:
+```shell script
+$ tsbs_load load timescaledb --config=./config.yaml
 ```
-你可以参考这个命令，来针对其他场景进行写入压测。
 
-下面是写入压测的典型输出：
-``` shell
+For more details on how to use tsbs_load check out the [supplemental docs](docs/tsbs_load.md)
+
+#### Using the database specific `tsbs_load_*` executables
+
+TSBS measures insert/write performance by taking the data generated in
+the previous step and using it as input to a database-specific command
+line program. To the extent that insert programs can be shared, we have
+made an effort to do that (e.g., the TimescaleDB loader can
+be used with a regular PostgreSQL database if desired). Each loader does
+share some common flags -- e.g., batch size (number of readings inserted
+together), workers (number of concurrently inserting clients), connection
+details (host & ports), etc -- but they also have database-specific tuning
+flags. To find the flags for a particular database, use the `-help` flag
+(e.g., `tsbs_load_timescaledb -help`).
+
+Here's an example of loading data to a remote timescaledb instance with SSL
+required, with a gzipped data set as created in the instructions above:
+
+```bash
+cat /tmp/timescaledb-data.gz | gunzip | tsbs_load_timescaledb \
+--postgres="sslmode=require" --host="my.tsdb.host" --port=5432 --pass="password" \
+--user="benchmarkuser" --admin-db-name=defaultdb --workers=8  \
+--in-table-partition-tag=true --chunk-time=8h --write-profile= \
+--field-index-count=1 --do-create-db=true --force-text-format=false \
+--do-abort-on-exist=false
+```
+
+For simpler testing, especially locally, we also supply
+`scripts/load/load_<database>.sh` for convenience with many of the flags set
+to a reasonable default for some of the databases.
+So for loading into TimescaleDB, ensure that TimescaleDB is running and
+then use:
+```bash
+# Will insert using 2 clients, batch sizes of 10k, from a file
+# named `timescaledb-data.gz` in directory `/tmp`
+$ NUM_WORKERS=2 BATCH_SIZE=10000 BULK_DATA_DIR=/tmp \
+    scripts/load/load_timescaledb.sh
+```
+
+This will create a new database called `benchmark` where the data is
+stored. It **will overwrite** the database if it exists; if you don't
+want that to happen, supply a different `DATABASE_NAME` to the above
+command.
+
+Example for writing to remote host using `load_timescaledb.sh`:
+```bash
+# Will insert using 2 clients, batch sizes of 10k, from a file
+# named `timescaledb-data.gz` in directory `/tmp`
+$ NUM_WORKERS=2 BATCH_SIZE=10000 BULK_DATA_DIR=/tmp DATABASE_HOST=remotehostname
+DATABASE_USER=user DATABASE \
+    scripts/load/load_timescaledb.sh
+```
+
+---
+
+By default, statistics about the load performance are printed every 10s,
+and when the full dataset is loaded the looks like this:
+```text
 time,per. metric/s,metric total,overall metric/s,per. row/s,row total,overall row/s
-1721384152,1250918.25,6.255700E+06,1250918.25,52990.61,2.650000E+05,52990.61
-1721384157,1329652.99,1.290420E+07,1290282.83,54998.06,5.400000E+05,53994.26
-1721384162,1113056.53,1.846920E+07,1231213.58,48002.44,7.800000E+05,51997.20
-1721384167,1156375.48,2.425070E+07,1212505.73,50003.26,1.030000E+06,51498.76
-1721384172,1150234.47,3.000250E+07,1200050.63,49994.54,1.280000E+06,51197.89
-1721384177,1095714.27,3.548000E+07,1182664.67,47009.19,1.515000E+06,50499.91
-1721384182,1132665.20,4.114420E+07,1175520.95,48992.44,1.760000E+06,50284.53
+# ...
+1518741528,914996.143291,9.652000E+08,1096817.886674,91499.614329,9.652000E+07,109681.788667
+1518741548,1345006.018902,9.921000E+08,1102333.152918,134500.601890,9.921000E+07,110233.315292
+1518741568,1149999.844750,1.015100E+09,1103369.385320,114999.984475,1.015100E+08,110336.938532
 
 Summary:
-loaded 44928000 metrics in 39.884sec with 8 workers (mean rate 1126478.58 metrics/sec)
-loaded 1944000 rows in 39.884sec with 8 workers (mean rate 48741.86 rows/sec)
-```
-`Summary` 之前的部分，是压测过程中按一定的间隔打印出来的统计量，默认每隔 10 秒打印一次统计量。这些统计量的含义由第一行 header 给出，分别是：
-- `time`：打印这条日志的时间。
-- `per. metric/s`：在本次统计间隔内，平均每秒写入的 metrics 的量。
-- `metric total`：累计写入的 metrics 的总量。
-- `overall metric/s`：从压测开始，平均每秒写入的 metrics 的量。
-- `per. row/s`：在本次统计间隔内，平均每秒写入的行数。
-- `row total`：累计写入的总行数。
-- `overall row/s`：从压测开始，平均每秒写入的行数。
-
-`Summary` 之后的部分，是压测结束时打印的最终统计量。第一行表示，N 个 workers 总共花费 T 时间写入了 M 个 metrics。括号里面的是所有 workers 加起来，平均每秒写入的 metrics 量。第一行表示，N 个 workers 总共花费 T 时间写入了 R 行。括号里面的是所有 workers 加起来，平均每秒写入的行数。
-
-# 查询压测
-TODO
-
-对于 devops 和 cpu-only 场景而言，TSBS 针对以下查询进行压测：
-- `single-groupby-1-1-1`: Simple aggregrate (MAX) on one metric for 1 host, every 5 mins for 1 hour
-- `single-groupby-1-8-1`: Simple aggregrate (MAX) on one metric for 8 hosts, every 5 mins for 1 hour
-- `single-groupby-5-1-1`: Simple aggregrate (MAX) on 5 metrics for 1 host, every 5 mins for 1 hour
-- `single-groupby-1-1-12`: Simple aggregrate (MAX) on one metric for 1 host, every 5 mins for 12 hours
-- `single-groupby-5-1-12`: Simple aggregrate (MAX) on 5 metrics for 1 host, every 5 mins for 12 hours
-- `single-groupby-5-8-1`: Simple aggregrate (MAX) on 5 metrics for 8 hosts, every 5 mins for 1 hour
-- `double-groupby-1`: Aggregate on across both time and host, giving the average of 1 CPU metric per host per hour for 24 hours
-- `double-groupby-5`: Aggregate on across both time and host, giving the average of 5 CPU metrics per host per hour for 24 hours
-- `double-groupby-all`: Aggregate on across both time and host, giving the average of all (10) CPU metrics per host per hour for 24 hours
-- `groupby-orderby-limit`: The last 5 aggregate readings (across time) before a randomly chosen endpoint
-- `cpu-max-all-1`: Aggregate across all CPU metrics per hour over 8 hour for a single host
-- `cpu-max-all-8`: Aggregate across all CPU metrics per hour over 8 hour for eight hosts
-- `cpu-max-all-32-24`: Aggregate across all CPU metrics per hour over 24 hour for 32 hosts
-- `high-cpu-1`: All the readings where one metric is above a threshold for a particular host
-- `high-cpu-all`: All the readings where one metric is above a threshold across all hosts
-- `lastpoint`: The last reading for each host
-
-[TODO(niebayes)] 对于 iot 场景而言，TSBS 针对以下查询进行压测：
-- `long-daily-sessions`:
-- `avg-vs-projected-fuel-consumption`:
-- `avg-daily-driving-session`:
-- `breakdown-frequency`:
-- `last-loc`:
-- `long-driving-sessions`:
-- `high-load`:
-- `stationary-trucks`:
-- `avg-daily-driving-duration`:
-- `avg-load`:
-- `daily-activity`:
-- `single-last-loc`:
-- `low-fuel`:
-
-## 生成查询命令
-生成单个查询的例子：
-``` shell
-./bin/tsbs_generate_queries \
-  --format="datalayers" \
-  --query-type="single-groupby-1-1-1" \
-  --queries=100 \
-  --scale=100 \
-  --seed=42 \
-  --use-case="devops" \
-  --timestamp-start="2016-01-01T00:00:00Z" \
-  --timestamp-end="2016-01-01T06:00:01Z" \
-  --file="./datalayers-devops-single-groupby-1-1-1"
+loaded 1036800000 metrics in 936.525765sec with 8 workers (mean rate 1107070.449780/sec)
+loaded 103680000 rows in 936.525765sec with 8 workers (mean rate 110707.044978/sec)
 ```
 
-## 执行查询
+All but the last two lines contain the data in CSV format, with column names in the header. Those column names correspond to:
+* timestamp,
+* metrics per second in the period,
+* total metrics inserted,
+* overall metrics per second,
+* rows per second in the period,
+* total number of rows,
+* overall rows per second.
 
-# TSBS 压测框架解析
-TODO
+For databases, like Cassandra, that do not use rows when inserting,
+the last three values are always empty (indicated with a `-`).
+
+The last two lines are a summary of how many metrics (and rows where
+applicable) were inserted, the wall time it took, and the average rate
+of insertion.
+
+### Benchmarking query execution performance
+
+To measure query execution performance in TSBS, you first need to load
+the data using the previous section and generate the queries as
+described earlier. Once the data is loaded and the queries are generated,
+just use the corresponding `tsbs_run_queries_` binary for the database
+being tested:
+```bash
+$ cat /tmp/queries/timescaledb-cpu-max-all-eight-hosts-queries.gz | \
+    gunzip | tsbs_run_queries_timescaledb --workers=8 \
+        --postgres="host=localhost user=postgres sslmode=disable"
+```
+
+You can change the value of the `--workers` flag to
+control the level of parallel queries run at the same time. The
+resulting output will look similar to this:
+```text
+run complete after 1000 queries with 8 workers:
+TimescaleDB max cpu all fields, rand    8 hosts, rand 12hr by 1h:
+min:    51.97ms, med:   757.55, mean:  2527.98ms, max: 28188.20ms, stddev:  2843.35ms, sum: 5056.0sec, count: 2000
+all queries                                                     :
+min:    51.97ms, med:   757.55, mean:  2527.98ms, max: 28188.20ms, stddev:  2843.35ms, sum: 5056.0sec, count: 2000
+wall clock time: 633.936415sec
+```
+
+The output gives you the description of the query and multiple groupings
+of measurements (which may vary depending on the database).
+
+---
+
+For easier testing of multiple queries, we provide
+`scripts/generate_run_script.py` which creates a bash script with commands
+to run multiple query types in a row. The queries it generates should be
+put in a file with one query per line and the path given to the script.
+For example, if you had a file named `queries.txt` that looked like this:
+```text
+last-loc
+avg-load
+high-load
+long-driving-session
+```
+
+You could generate a run script named `query_test.sh`:
+```bash
+# Generate run script for TimescaleDB, using queries in `queries.txt`
+# with the generated query files in /tmp/queries for 8 workers
+$ python generate_run_script.py -d timescaledb -o /tmp/queries \
+    -w 8 -f queries.txt > query_test.sh
+```
+
+And the resulting script file would look like:
+```bash
+#!/bin/bash
+# Queries
+cat /tmp/queries/timescaledb-last-loc-queries.gz | gunzip | query_benchmarker_timescaledb --workers=8 --limit=1000 --hosts="localhost" --postgres="user=postgres sslmode=disable"  | tee query_timescaledb_timescaledb-last-loc-queries.out
+
+cat /tmp/queries/timescaledb-avg-load-queries.gz | gunzip | query_benchmarker_timescaledb --workers=8 --limit=1000 --hosts="localhost" --postgres="user=postgres sslmode=disable"  | tee query_timescaledb_timescaledb-avg-load-queries.out
+
+cat /tmp/queries/timescaledb-high-load-queries.gz | gunzip | query_benchmarker_timescaledb --workers=8 --limit=1000 --hosts="localhost" --postgres="user=postgres sslmode=disable"  | tee query_timescaledb_timescaledb-high-load-queries.out
+
+cat /tmp/queries/timescaledb-long-driving-session-queries.gz | gunzip | query_benchmarker_timescaledb --workers=8 --limit=1000 --hosts="localhost" --postgres="user=postgres sslmode=disable"  | tee query_timescaledb_timescaledb-long-driving-session-queries.out
+```
+
+### Query validation (optional)
+
+Additionally each `tsbs_run_queries_` binary allows you print the
+actual query results so that you can compare across databases that the
+results are the same. Using the flag `-print-responses` will return
+the results.
+
+## Appendix I: Query types <a name="appendix-i-query-types"></a>
+
+### Devops / cpu-only
+|Query type|Description|
+|:---|:---|
+|single-groupby-1-1-1| Simple aggregrate (MAX) on one metric for 1 host, every 5 mins for 1 hour
+|single-groupby-1-1-12| Simple aggregrate (MAX) on one metric for 1 host, every 5 mins for 12 hours
+|single-groupby-1-8-1| Simple aggregrate (MAX) on one metric for 8 hosts, every 5 mins for 1 hour
+|single-groupby-5-1-1| Simple aggregrate (MAX) on 5 metrics for 1 host, every 5 mins for 1 hour
+|single-groupby-5-1-12| Simple aggregrate (MAX) on 5 metrics for 1 host, every 5 mins for 12 hours
+|single-groupby-5-8-1| Simple aggregrate (MAX) on 5 metrics for 8 hosts, every 5 mins for 1 hour
+|cpu-max-all-1| Aggregate across all CPU metrics per hour over 1 hour for a single host
+|cpu-max-all-8| Aggregate across all CPU metrics per hour over 1 hour for eight hosts
+|double-groupby-1| Aggregate on across both time and host, giving the average of 1 CPU metric per host per hour for 24 hours
+|double-groupby-5| Aggregate on across both time and host, giving the average of 5 CPU metrics per host per hour for 24 hours
+|double-groupby-all| Aggregate on across both time and host, giving the average of all (10) CPU metrics per host per hour for 24 hours
+|high-cpu-all| All the readings where one metric is above a threshold across all hosts
+|high-cpu-1| All the readings where one metric is above a threshold for a particular host
+|lastpoint| The last reading for each host
+|groupby-orderby-limit| The last 5 aggregate readings (across time) before a randomly chosen endpoint
+
+### IoT
+|Query type|Description|
+|:---|:---|
+|last-loc|Fetch real-time (i.e. last) location of each truck
+|low-fuel|Fetch all trucks with low fuel (less than 10%)
+|high-load|Fetch trucks with high current load (over 90% load capacity)
+|stationary-trucks|Fetch all trucks that are stationary (low avg velocity in last 10 mins)
+|long-driving-sessions|Get trucks which haven't rested for at least 20 mins in the last 4 hours
+|long-daily-sessions|Get trucks which drove more than 10 hours in the last 24 hours
+|avg-vs-projected-fuel-consumption|Calculate average vs. projected fuel consumption per fleet
+|avg-daily-driving-duration|Calculate average daily driving duration per driver
+|avg-daily-driving-session|Calculate average daily driving session per driver
+|avg-load|Calculate average load per truck model per fleet
+|daily-activity|Get the number of hours truck has been active (vs. out-of-commission) per day per fleet
+|breakdown-frequency|Calculate breakdown frequency by truck model
+
+## Contributing
+
+We welcome contributions from the community to make TSBS better!
+
+You can help either by opening an
+[issue](https://github.com/timescale/tsbs/issues) with
+any suggestions or bug reports, or by forking this repository,
+making your own contribution, and submitting a pull request.
+
+Before we accept any contributions, Timescale contributors need to
+sign the [Contributor License Agreement](https://cla-assistant.io/timescale/tsbs) (CLA).
+By signing a CLA, we can ensure that the community is free and confident in its
+ability to use your contributions.
