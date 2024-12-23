@@ -4,7 +4,7 @@ data-source:
     location: ./generated_data/datalayers/cpu-only-100-31d.data
 loader:
   db-specific:
-    sql-endpoint: 10.0.0.10:8360
+    sql-endpoint: localhost:8360
     batch-size: "10000"
     num-workers: "64"
   runner:

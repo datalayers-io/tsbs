@@ -8,5 +8,5 @@ QUERY_FILE="./generated_query/datalayers/cpu-only/$SCENARIO/$QUERY_TYPE.query"
 
 ./bin/tsbs_run_queries_datalayers \
     --file="$QUERY_FILE" \
-    --sql-endpoint="10.0.0.10:8360" \
+    --sql-endpoint="localhost:8360" \
     --workers=$WORKERS 
