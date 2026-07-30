@@ -1,5 +1,7 @@
 #!/bin/bash
 
+unset http_proxy https_proxy
+
 SCENARIO=$1
 case $SCENARIO in
   1)

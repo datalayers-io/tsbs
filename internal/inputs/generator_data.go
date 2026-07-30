@@ -135,7 +135,7 @@ func (g *DataGenerator) getSerializer(sim common.Simulator, target targets.Imple
 	return target.Serializer(), nil
 }
 
-//TODO should be implemented in targets package
+// TODO should be implemented in targets package
 func (g *DataGenerator) writeHeader(headers *common.GeneratedDataHeaders) {
 	g.bufOut.WriteString("tags")
 

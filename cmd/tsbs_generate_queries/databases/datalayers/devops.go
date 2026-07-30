@@ -18,17 +18,12 @@ func panicIfErr(err error) {
 type Devops struct {
 	*BaseGenerator
 	*devops.Core
+	scenario string
+	vcpu     int
 }
 
 // GroupByTime selects the MAX for numMetrics metrics under 'cpu',
-// per minute for nhosts hosts,
-// e.g. in pseudo-SQL:
-//
-// SELECT minute, max(metric1), ..., max(metricN)
-// FROM cpu
-// WHERE hostname IN ('$HOSTNAME_1',...,'$HOSTNAME_N')
-// AND time >= '$HOUR_START' AND time < '$HOUR_END'
-// GROUP BY minute ORDER BY minute ASC
+// per minute for nhosts hosts.
 func (d *Devops) GroupByTime(q query.Query, nHosts, numMetrics int, duration time.Duration) {
 	interval := d.Interval.MustRandWindow(duration)
 	metrics, err := devops.GetCPUMetricsSlice(numMetrics)
@@ -38,14 +33,29 @@ func (d *Devops) GroupByTime(q query.Query, nHosts, numMetrics int, duration tim
 		panic(fmt.Sprintf("invalid number of select clauses: got %d", len(selectClauses)))
 	}
 
+	durationHours := int(duration.Hours())
+	var hintKey string
+	switch {
+	case nHosts <= 1 && durationHours <= 1:
+		hintKey = "groupby-1host-1h"
+	case nHosts <= 1 && durationHours > 1:
+		hintKey = "groupby-1host-12h"
+	case numMetrics <= 1:
+		hintKey = "groupby-8host-1h-1m"
+	default:
+		hintKey = "groupby-8host-1h-5m"
+	}
+	hintStr := d.hint(d.parallelDegreeFor(hintKey))
+
 	sql := fmt.Sprintf(`
-			SELECT date_trunc('minute', ts) AS minute, 
+			SELECT %s date_trunc('minute', ts) AS minute, 
 			%s
 			FROM cpu
 			WHERE %s 
 			AND ts >= '%s' AND ts < '%s' 
 			GROUP BY minute 
 			ORDER BY minute ASC`,
+		hintStr,
 		strings.Join(selectClauses, ", "),
 		d.getHostWhereString(nHosts),
 		interval.StartString(),
@@ -57,21 +67,20 @@ func (d *Devops) GroupByTime(q query.Query, nHosts, numMetrics int, duration tim
 	d.fillInQuery(q, humanLabel, humanDesc, sql)
 }
 
-// GroupByOrderByLimit populates a query.Query that has a time WHERE clause, that groups by a truncated date, orders by that date, and takes a limit:
-// SELECT time_bucket('1 minute', time) AS t, MAX(cpu) FROM cpu
-// WHERE time < '$TIME'
-// GROUP BY t ORDER BY t DESC
-// LIMIT $LIMIT
+// GroupByOrderByLimit populates a query.Query that has a time WHERE clause, that groups by a truncated date, orders by that date, and takes a limit.
 func (d *Devops) GroupByOrderByLimit(q query.Query) {
 	interval := d.Interval.MustRandWindow(time.Hour)
 
-	sql := fmt.Sprintf(`SELECT date_trunc('minute', ts) AS minute, 
+	hintStr := d.hint(d.parallelDegreeFor("groupby-orderby-limit"))
+
+	sql := fmt.Sprintf(`SELECT %s date_trunc('minute', ts) AS minute, 
 		max(usage_user) 
         FROM cpu 
         WHERE ts < '%s' 
         GROUP BY minute 
         ORDER BY minute DESC 
         LIMIT 5`,
+		hintStr,
 		interval.EndString(),
 	)
 
@@ -80,25 +89,22 @@ func (d *Devops) GroupByOrderByLimit(q query.Query) {
 	d.fillInQuery(q, humanLabel, humanDesc, sql)
 }
 
-// GroupByTimeAndPrimaryTag selects the AVG of numMetrics metrics under 'cpu' per device per hour for a day,
-// e.g. in pseudo-SQL:
-//
-// SELECT AVG(metric1), ..., AVG(metricN)
-// FROM cpu
-// WHERE time >= '$HOUR_START' AND time < '$HOUR_END'
-// GROUP BY hour, hostname ORDER BY hour
+// GroupByTimeAndPrimaryTag selects the AVG of numMetrics metrics under 'cpu' per device per hour for a day.
 func (d *Devops) GroupByTimeAndPrimaryTag(q query.Query, numMetrics int) {
 	metrics, err := devops.GetCPUMetricsSlice(numMetrics)
 	panicIfErr(err)
 	selectClauses := d.getSelectClausesAggMetrics("avg", metrics)
 	interval := d.Interval.MustRandWindow(devops.DoubleGroupByDuration)
 
-	sql := fmt.Sprintf(`SELECT date_trunc('hour', ts) AS hour, 
+	hintStr := d.hint(d.parallelDegreeFor(doubleGroupByKey(numMetrics)))
+
+	sql := fmt.Sprintf(`SELECT %s date_trunc('hour', ts) AS hour, 
 		%s 
 		FROM cpu 
 		WHERE ts >= '%s' AND ts < '%s' 
 		GROUP BY hour, hostname 
 		ORDER BY hour`,
+		hintStr,
 		strings.Join(selectClauses, ", "),
 		interval.StartString(),
 		interval.EndString(),
@@ -109,25 +115,28 @@ func (d *Devops) GroupByTimeAndPrimaryTag(q query.Query, numMetrics int) {
 	d.fillInQuery(q, humanLabel, humanDesc, sql)
 }
 
-// MaxAllCPU selects the MAX of all metrics under 'cpu' per hour for nhosts hosts,
-// e.g. in pseudo-SQL:
-//
-// SELECT MAX(metric1), ..., MAX(metricN)
-// FROM cpu WHERE hostname IN ('$HOSTNAME_1',...,'$HOSTNAME_N')
-// AND time >= '$HOUR_START' AND time < '$HOUR_END'
-// GROUP BY hour ORDER BY hour
+// MaxAllCPU selects the MAX of all metrics under 'cpu' per hour for nhosts hosts.
 func (d *Devops) MaxAllCPU(q query.Query, nHosts int, duration time.Duration) {
 	interval := d.Interval.MustRandWindow(duration)
 	metrics := devops.GetAllCPUMetrics()
 	selectClauses := d.getSelectClausesAggMetrics("max", metrics)
 
-	sql := fmt.Sprintf(`SELECT date_trunc('hour', ts) AS hour, 
+	var hintKey string
+	if nHosts <= 1 {
+		hintKey = "cpu-max-all-1host"
+	} else {
+		hintKey = "cpu-max-all-8host"
+	}
+	hintStr := d.hint(d.parallelDegreeFor(hintKey))
+
+	sql := fmt.Sprintf(`SELECT %s date_trunc('hour', ts) AS hour, 
         %s 
         FROM cpu 
         WHERE %s 
 		AND ts >= '%s' AND ts < '%s' 
         GROUP BY hour 
 		ORDER BY hour`,
+		hintStr,
 		strings.Join(selectClauses, ", "),
 		d.getHostWhereString(nHosts),
 		interval.StartString(),
@@ -141,13 +150,31 @@ func (d *Devops) MaxAllCPU(q query.Query, nHosts int, duration time.Duration) {
 
 // LastPointPerHost finds the last row for every host in the dataset
 func (d *Devops) LastPointPerHost(q query.Query) {
-	sql := `WITH ranked_cpu AS (
-		SELECT *, ROW_NUMBER() OVER (PARTITION BY hostname ORDER BY ts DESC) as row_num 
-		FROM cpu 
-		) 
-		SELECT * 
-		FROM ranked_cpu 
-		WHERE row_num = 1`
+	hintStr := d.hint(d.parallelDegreeFor("lastpoint"))
+
+	sql := fmt.Sprintf(`SELECT %s
+		last_value(hostname ORDER BY ts),
+		last_value(region ORDER BY ts),
+		last_value(datacenter ORDER BY ts),
+		last_value(rack ORDER BY ts),
+		last_value(os ORDER BY ts),
+		last_value(arch ORDER BY ts),
+		last_value(team ORDER BY ts),
+		last_value(service ORDER BY ts),
+		last_value(service_version ORDER BY ts),
+		last_value(service_environment ORDER BY ts),
+		last_value(usage_user ORDER BY ts),
+		last_value(usage_system ORDER BY ts),
+		last_value(usage_idle ORDER BY ts),
+		last_value(usage_nice ORDER BY ts),
+		last_value(usage_iowait ORDER BY ts),
+		last_value(usage_irq ORDER BY ts),
+		last_value(usage_softirq ORDER BY ts),
+		last_value(usage_steal ORDER BY ts),
+		last_value(usage_guest ORDER BY ts),
+		last_value(usage_guest_nice ORDER BY ts)
+		FROM cpu
+		GROUP BY hostname`, hintStr)
 
 	humanLabel := "Datalayers last row per host"
 	humanDesc := humanLabel
@@ -155,13 +182,7 @@ func (d *Devops) LastPointPerHost(q query.Query) {
 }
 
 // HighCPUForHosts populates a query that gets CPU metrics when the CPU has high
-// usage between a time period for a number of hosts (if 0, it will search all hosts),
-// e.g. in pseudo-SQL:
-//
-// SELECT * FROM cpu
-// WHERE usage_user > 90.0
-// AND time >= '$TIME_START' AND time < '$TIME_END'
-// AND (hostname = '$HOST' OR hostname = '$HOST2'...)
+// usage between a time period for a number of hosts (if 0, it will search all hosts).
 func (d *Devops) HighCPUForHosts(q query.Query, nHosts int) {
 	interval := d.Interval.MustRandWindow(devops.HighCPUDuration)
 	var hostWhereClause string
@@ -171,11 +192,20 @@ func (d *Devops) HighCPUForHosts(q query.Query, nHosts int) {
 		hostWhereClause = "AND " + d.getHostWhereString(nHosts)
 	}
 
-	sql := fmt.Sprintf(`SELECT * 
+	var hintKey string
+	if nHosts == 0 {
+		hintKey = "high-cpu-all"
+	} else {
+		hintKey = "high-cpu-1host"
+	}
+	hintStr := d.hint(d.parallelDegreeFor(hintKey))
+
+	sql := fmt.Sprintf(`SELECT %s * 
 		FROM cpu 
 		WHERE usage_user > 90.0 
 		AND ts >= '%s' AND ts < '%s' 
 		%s`,
+		hintStr,
 		interval.StartString(),
 		interval.EndString(),
 		hostWhereClause,
@@ -188,14 +218,11 @@ func (d *Devops) HighCPUForHosts(q query.Query, nHosts int) {
 }
 
 // getHostWhereWithHostnames creates WHERE SQL statement for multiple hostnames.
-// NOTE 'WHERE' itself is not included, just hostname filter clauses, ready to concatenate to 'WHERE' string
 func (d *Devops) getHostWhereWithHostnames(hostnames []string) string {
 	var hostnameClauses []string
 	for _, s := range hostnames {
 		hostnameClauses = append(hostnameClauses, fmt.Sprintf("'%s'", s))
 	}
-	// using the OR logic here is an anti-pattern for the query planner. Doing
-	// the IN will get translated to an ANY query and do better
 	return fmt.Sprintf("hostname IN (%s)", strings.Join(hostnameClauses, ", "))
 }
 
@@ -212,4 +239,16 @@ func (d *Devops) getSelectClausesAggMetrics(agg string, metrics []string) []stri
 		selectClauses[i] = fmt.Sprintf("%s(%s)", agg, m)
 	}
 	return selectClauses
+}
+
+// doubleGroupByKey returns the hint key for GroupByTimeAndPrimaryTag based on numMetrics.
+func doubleGroupByKey(numMetrics int) string {
+	switch numMetrics {
+	case 1:
+		return "double-groupby-1"
+	case 5:
+		return "double-groupby-5"
+	default:
+		return "double-groupby-all"
+	}
 }

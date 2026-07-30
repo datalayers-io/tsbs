@@ -1,8 +1,8 @@
 #!/bin/bash
 
+unset http_proxy https_proxy
+
 SCENARIO=$1
-WORKERS=$2
-BATCH_SIZE=$3
 
 case $SCENARIO in
   1)
@@ -30,9 +30,9 @@ esac
 FILE="./generated_data/influx/$FILE"
 
 ./bin/tsbs_load_influx \
-    --batch-size=$BATCH_SIZE \
-    --workers=$WORKERS \
+    --batch-size=10000 \
+    --workers=64 \
     --hash-workers=true \
     --seed=42 \
     --file=$FILE \
-    --urls="http://10.0.0.10:8086"
+    --urls="http://localhost:8086"

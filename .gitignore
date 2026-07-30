@@ -17,3 +17,7 @@ generated_data
 # Generated benchmark query.
 generated_query
 *.query
+
+# Bench parallel degree artifacts.
+my_scripts/.bench_parallel_*
+my_scripts/optimal_parallel_degree*.txt

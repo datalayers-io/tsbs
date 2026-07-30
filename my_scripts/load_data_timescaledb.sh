@@ -1,5 +1,7 @@
 #!/bin/bash
 
+unset http_proxy https_proxy
+
 SCENARIO=$1
 WORKERS=$2
 BATCH_SIZE=$3

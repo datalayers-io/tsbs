@@ -120,15 +120,8 @@ func TestDevopsGetSelectClausesAggMetrics(t *testing.T) {
 func TestDevopsGroupByTime(t *testing.T) {
 	expectedHumanLabel := "Datalayers 1 cpu metric(s), random    1 hosts, random 1s by 1m"
 	expectedHumanDesc := "Datalayers 1 cpu metric(s), random    1 hosts, random 1s by 1m: 1970-01-01T00:05:58Z"
-	expectedSQLQuery := `SELECT date_trunc('minute', ts) AS minute, 
-        max(usage_user)
-        FROM cpu
-        WHERE hostname IN ('host_0') 
-		AND ts >= '2016-01-01T00:00:00Z' AND ts < '2016-01-04T00:00:01Z'
-        GROUP BY minute 
-		ORDER BY minute ASC`
 
-	rand.Seed(123) // Setting seed for testing purposes.
+	rand.Seed(123)
 	s := time.Unix(0, 0)
 	e := s.Add(time.Hour)
 	b := BaseGenerator{}
@@ -145,13 +138,13 @@ func TestDevopsGroupByTime(t *testing.T) {
 	q := d.GenerateEmptyQuery()
 	d.GroupByTime(q, nHosts, metrics, duration)
 
-	verifyQuery(t, q, expectedHumanLabel, expectedHumanDesc, expectedSQLQuery)
+	verifyHintedQuery(t, q, expectedHumanLabel, expectedHumanDesc, "/*+ set_var(parallel_degree=1) */")
 }
 
 func TestGroupByOrderByLimit(t *testing.T) {
 	expectedHumanLabel := "Datalayers max cpu over last 5 min-intervals (random end)"
 	expectedHumanDesc := "Datalayers max cpu over last 5 min-intervals (random end): 1970-01-01T01:16:22Z"
-	expectedSQLQuery := `SELECT date_trunc('minute', ts) AS minute, 
+	expectedSQLQuery := `SELECT /*+ set_var(parallel_degree=16) */ date_trunc('minute', ts) AS minute, 
 		max(usage_user) 
 		FROM cpu 
 		WHERE ts < '1970-01-01T01:16:22Z' 
@@ -178,7 +171,7 @@ func TestGroupByOrderByLimit(t *testing.T) {
 func TestGroupByTimeAndPrimaryTag(t *testing.T) {
 	expectedHumanLabel := "Datalayers mean of 1 metrics, all hosts, random 12h0m0s by 1h"
 	expectedHumanDesc := "Datalayers mean of 1 metrics, all hosts, random 12h0m0s by 1h: 1970-01-01T00:16:22Z"
-	expectedSQLQuery := `SELECT date_trunc('hour', ts) AS hour, 
+	expectedSQLQuery := `SELECT /*+ set_var(parallel_degree=2) */ date_trunc('hour', ts) AS hour, 
 		avg(usage_user) 
 		FROM cpu 
 		WHERE ts >= '1970-01-01T00:16:22Z' AND ts < '1970-01-01T12:16:22Z' 
@@ -207,7 +200,7 @@ func TestGroupByTimeAndPrimaryTag(t *testing.T) {
 func TestMaxAllCPU(t *testing.T) {
 	expectedHumanLabel := "Datalayers max of all CPU metrics, random    1 hosts, random 8h0m0s by 1h"
 	expectedHumanDesc := "Datalayers max of all CPU metrics, random    1 hosts, random 8h0m0s by 1h: 1970-01-01T00:16:22Z"
-	expectedSQLQuery := `SELECT date_trunc('hour', ts) AS hour, 
+	expectedSQLQuery := `SELECT /*+ set_var(parallel_degree=1) */ date_trunc('hour', ts) AS hour, 
         max(usage_user), 
 		max(usage_system), 
 		max(usage_idle), 
@@ -243,13 +236,29 @@ func TestMaxAllCPU(t *testing.T) {
 func TestLastPointPerHost(t *testing.T) {
 	expectedHumanLabel := "Datalayers last row per host"
 	expectedHumanDesc := "Datalayers last row per host"
-	expectedSQLQuery := `WITH ranked_cpu AS (
-		SELECT *, ROW_NUMBER() OVER (PARTITION BY hostname ORDER BY ts DESC) as row_num 
+	expectedSQLQuery := `SELECT /*+ set_var(parallel_degree=6) */
+		last_value(hostname ORDER BY ts),
+		last_value(region ORDER BY ts),
+		last_value(datacenter ORDER BY ts),
+		last_value(rack ORDER BY ts),
+		last_value(os ORDER BY ts),
+		last_value(arch ORDER BY ts),
+		last_value(team ORDER BY ts),
+		last_value(service ORDER BY ts),
+		last_value(service_version ORDER BY ts),
+		last_value(service_environment ORDER BY ts),
+		last_value(usage_user ORDER BY ts),
+		last_value(usage_system ORDER BY ts),
+		last_value(usage_idle ORDER BY ts),
+		last_value(usage_nice ORDER BY ts),
+		last_value(usage_iowait ORDER BY ts),
+		last_value(usage_irq ORDER BY ts),
+		last_value(usage_softirq ORDER BY ts),
+		last_value(usage_steal ORDER BY ts),
+		last_value(usage_guest ORDER BY ts),
+		last_value(usage_guest_nice ORDER BY ts)
 		FROM cpu
-		) 
-		SELECT * 
-		FROM ranked_cpu 
-		WHERE row_num = 1`
+		GROUP BY hostname`
 
 	rand.Seed(123) // Setting seed for testing purposes.
 
@@ -279,7 +288,7 @@ func TestHighCPUForHosts(t *testing.T) {
 			nHosts:             0,
 			expectedHumanLabel: "Datalayers CPU over threshold, all hosts",
 			expectedHumanDesc:  "Datalayers CPU over threshold, all hosts: 1970-01-01T00:16:22Z",
-			expectedSQLQuery: `SELECT * 
+			expectedSQLQuery: `SELECT /*+ set_var(parallel_degree=32) */ * 
 				FROM cpu 
 				WHERE usage_user > 90.0 
 				AND ts >= '1970-01-01T00:16:22Z' AND ts < '1970-01-01T12:16:22Z'`,
@@ -289,7 +298,7 @@ func TestHighCPUForHosts(t *testing.T) {
 			nHosts:             1,
 			expectedHumanLabel: "Datalayers CPU over threshold, 1 host(s)",
 			expectedHumanDesc:  "Datalayers CPU over threshold, 1 host(s): 1970-01-01T00:54:10Z",
-			expectedSQLQuery: `SELECT * 
+			expectedSQLQuery: `SELECT /*+ set_var(parallel_degree=3) */ * 
 				FROM cpu 
 				WHERE usage_user > 90.0 
 				AND ts >= '1970-01-01T00:54:10Z' AND ts < '1970-01-01T12:54:10Z' 
@@ -300,7 +309,7 @@ func TestHighCPUForHosts(t *testing.T) {
 			nHosts:             5,
 			expectedHumanLabel: "Datalayers CPU over threshold, 5 host(s)",
 			expectedHumanDesc:  "Datalayers CPU over threshold, 5 host(s): 1970-01-01T00:37:12Z",
-			expectedSQLQuery: `SELECT * 
+			expectedSQLQuery: `SELECT /*+ set_var(parallel_degree=3) */ * 
 				FROM cpu 
 				WHERE usage_user > 90.0 
 				AND ts >= '1970-01-01T00:37:12Z' AND ts < '1970-01-01T12:37:12Z' 
@@ -358,6 +367,29 @@ func verifyQuery(t *testing.T, q query.Query, humanLabel, humanDesc, sqlQuery st
 			t.Errorf("incorrect SQL query:\ngot\n%s\nwant\n%s", string(flightSqlQuery.RawQuery), sqlQuery)
 			return
 		}
+	}
+}
+
+func verifyHintedQuery(t *testing.T, q query.Query, humanLabel, humanDesc, expectedHint string) {
+	flightSqlQuery, ok := q.(*query.FlightSqlQuery)
+	if !ok {
+		t.Fatal("Filled query is not *query.FlightSqlQuery type")
+	}
+	if got := string(flightSqlQuery.HumanLabel); got != humanLabel {
+		t.Errorf("incorrect human label:\ngot\n%s\nwant\n%s", got, humanLabel)
+	}
+	if got := string(flightSqlQuery.HumanDescription); got != humanDesc {
+		t.Errorf("incorrect human description:\ngot\n%s\nwant\n%s", got, humanDesc)
+	}
+	rawSQL := string(flightSqlQuery.RawQuery)
+	if !strings.Contains(rawSQL, expectedHint) {
+		t.Errorf("SQL missing expected hint %q:\ngot\n%s", expectedHint, rawSQL)
+	}
+	if !strings.Contains(rawSQL, "SELECT") {
+		t.Errorf("SQL missing SELECT keyword:\ngot\n%s", rawSQL)
+	}
+	if !strings.Contains(rawSQL, "FROM cpu") {
+		t.Errorf("SQL missing FROM cpu:\ngot\n%s", rawSQL)
 	}
 }
 

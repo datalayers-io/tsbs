@@ -19,6 +19,6 @@ loader:
     channel-capacity: "0"
     db-name: benchmark
     do-abort-on-exist: false
-    do-create-db: true
+    do-create-db: false
     do-load: true
   target: datalayers

@@ -10,7 +10,9 @@
 
 // Supported use cases:
 // devops: scale is the number of hosts to simulate, with log messages
-//         every log-interval seconds.
+//
+//	every log-interval seconds.
+//
 // cpu-only: same as `devops` but only generate metrics for CPU
 package main
 

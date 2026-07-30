@@ -15,12 +15,11 @@ all: generators loaders runners
 generators: tsbs_generate_data \
 			tsbs_generate_queries
 
-loaders: tsbs_load
-# loaders: tsbs_load \
-# 		 tsbs_load_influx \
+# loaders: tsbs_load
+loaders: tsbs_load tsbs_load_influx
 # 		 tsbs_load_timescaledb
 
-runners: tsbs_run_queries_datalayers
+runners: tsbs_run_queries_datalayers tsbs_run_queries_influx
 # runners: tsbs_run_queries_influx \
 # 		 tsbs_run_queries_timescaledb \
 # 		 tsbs_run_queries_datalayers

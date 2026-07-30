@@ -25,7 +25,7 @@ func (rs ReplicationStats) ToSlice() []string {
 }
 
 /*
-  Query PostgreSQL for replication stats
+Query PostgreSQL for replication stats
 */
 func getReplicationStats(db *sqlx.DB) []ReplicationStats {
 	replicationStats := []ReplicationStats{}
@@ -37,8 +37,8 @@ func getReplicationStats(db *sqlx.DB) []ReplicationStats {
 }
 
 /*
-  Write data about the state of replication lag for each replica to a CSV every 5 seconds, stopping
-  when all replicas are no longer streaming.
+Write data about the state of replication lag for each replica to a CSV every 5 seconds, stopping
+when all replicas are no longer streaming.
 */
 func OutputReplicationStats(dbConnString string, outputFileName string, wg *sync.WaitGroup) {
 	wg.Add(1)
