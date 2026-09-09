@@ -143,7 +143,7 @@ func (b *BenchmarkRunner) Run(queryPool *sync.Pool, processorCreateFn ProcessorC
 	}
 
 	spArgs := b.sp.getArgs()
-	if spArgs.burnIn > b.Limit {
+	if b.Limit > 0 && spArgs.burnIn > b.Limit {
 		panic("burn-in is larger than limit")
 	}
 	b.ch = make(chan Query, b.Workers)

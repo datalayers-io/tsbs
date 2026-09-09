@@ -1,87 +1,48 @@
 package datalayers
 
 import (
+	"bufio"
 	"fmt"
-
-	// "log"
-
 	"os"
-
-	// "time"
 
 	"github.com/timescale/tsbs/pkg/data"
 	"github.com/timescale/tsbs/pkg/data/usecases/common"
 	"github.com/timescale/tsbs/pkg/targets"
 )
 
+// DataSourceFile is the underlying data file, kept so the generic loader can
+// close it after the scan finishes.
 var DataSourceFile *os.File = nil
-var HostTags map[string][]string
 
-// This file contains stuff used by the scanner.
-// When the scanner starts, it spawns a collection of workers.
-// There's one duplex channel for each worker so that the scanner could sent data
-// to the worker and the worker could send acknowledgement to tell the scanner that
-// the sent data are processed.
-//
-// The scanner also maintains a batch for each channel to buffer scanned data points.
-// To determine which channel should a data point go to, we use the point indexer to
-// set the index of channels for each data point and send the data point to the corresponding channel.
-
+// dataSource reads the data file line by line using a buffered scanner,
+// so that no line is ever split across a chunk boundary.
 type dataSource struct {
-	subFiles [][]int64
-	cursor   int
+	scanner *bufio.Scanner
 }
 
-// Creates a new file data source.
+// NewDataSource creates a sequential, line-oriented file data source.
 func NewDataSource(fileName string, numProcessors int64) targets.DataSource {
 	file, err := os.Open(fileName)
 	if err != nil {
 		panic(fmt.Sprintf("failed to open file %v. error: %v", fileName, err))
 	}
-
-	fileInfo, err := file.Stat()
-	if err != nil {
-		panic(fmt.Sprintf("failed to get file info. error: %v", err))
-	}
-	fileSize := fileInfo.Size()
-	// fmt.Printf("The file size is %v\n", fileSize)
-
-	chunkSize := (fileSize + numProcessors - 1) / numProcessors
-	// fmt.Printf("The chunk size is %v\n", chunkSize)
-
-	subFiles := make([][]int64, 0, numProcessors)
-	for i := int64(0); i < numProcessors; i++ {
-		startOffset := i * chunkSize
-		endOffset := min(startOffset+chunkSize, fileSize)
-
-		// fmt.Printf("The range of chunk %v is [%v,%v)\n", i, startOffset, endOffset)
-
-		subFiles = append(subFiles, []int64{startOffset, endOffset})
-	}
-
-	fmt.Printf("Create %v sub files each of at most length %v for %v processors\n", len(subFiles), chunkSize, numProcessors)
-
 	DataSourceFile = file
-	if DataSourceFile == nil {
-		panic("The DataSourceFile cannot be nil")
-	}
 
-	return &dataSource{cursor: 0, subFiles: subFiles}
+	scanner := bufio.NewScanner(file)
+	// Lines are ~100 bytes; raise the cap well above the default 64KB to be safe.
+	scanner.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
+
+	return &dataSource{scanner: scanner}
 }
 
-// Retrieves the next item from the data source.
-// An item only contains a single data point for Datalayers.
+// NextItem retrieves the next line from the data source.
 func (ds *dataSource) NextItem() data.LoadedPoint {
-	if ds.cursor >= len(ds.subFiles) {
+	if !ds.scanner.Scan() {
 		return data.LoadedPoint{}
 	}
-	subFile := ds.subFiles[ds.cursor]
-
-	// fmt.Printf("Produce a subFile item = %v\n", subFile)
-
-	ds.cursor += 1
-
-	return data.LoadedPoint{Data: subFile}
+	line := make([]byte, len(ds.scanner.Bytes()))
+	copy(line, ds.scanner.Bytes())
+	return data.LoadedPoint{Data: line}
 }
 
 // Gets the headers of the data source. Not used by Datalayers.
@@ -98,7 +59,6 @@ type pointIndexer struct {
 
 // Creates a new point indexer.
 func NewPointIndexer(maxPartitions uint) targets.PointIndexer {
-	// fmt.Printf("Create a point indexer with maxPartitions = %v\n", maxPartitions)
 	return &pointIndexer{cursor: 0, maxPartitions: maxPartitions}
 }
 
@@ -110,22 +70,18 @@ func (indexer *pointIndexer) GetIndex(_ data.LoadedPoint) uint {
 }
 
 // Batch is an aggregate of points for a particular data system.
-// It needs to have a way to measure it's size to make sure
-// it does not get too large and it needs a way to append a point
 type batch struct {
-	subFile []int64
+	lines [][]byte
 }
 
 // Gets the current length of the batch.
-// For Datalayers, the length is the number of data points currently stored in the batch.
 func (b *batch) Len() uint {
-	return 1
+	return uint(len(b.lines))
 }
 
-// Appends a data point to the batch.
+// Appends a data point (a single line) to the batch.
 func (b *batch) Append(loadedPoint data.LoadedPoint) {
-	subFile := loadedPoint.Data.([]int64)
-	b.subFile = subFile
+	b.lines = append(b.lines, loadedPoint.Data.([]byte))
 }
 
 // BatchFactory returns a new empty batch for storing points.

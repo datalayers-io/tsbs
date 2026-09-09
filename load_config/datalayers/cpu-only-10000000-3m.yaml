@@ -9,8 +9,8 @@ loader:
     num-workers: "64"
   runner:
     workers: "64"
-    batch-size: "15"
-    flow-control: true
+    batch-size: "10000"
+    flow-control: false
     hash-workers: true
     insert-intervals: ""
     limit: "0"

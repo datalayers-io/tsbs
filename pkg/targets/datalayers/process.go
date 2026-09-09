@@ -3,12 +3,9 @@ package datalayers
 import (
 	"context"
 	"fmt"
-	"io"
 	"strconv"
 	"strings"
 	"time"
-
-	// "github.com/prometheus/common/log"
 
 	"github.com/prometheus/common/log"
 	"github.com/timescale/tsbs/pkg/targets"
@@ -54,7 +51,6 @@ var cpuFieldTypes []arrow.DataType = []arrow.DataType{
 type processor struct {
 	targetDB           string
 	batchSize          int
-	fileName           string
 	client             *datalayers.Client
 	arrowRecordBuilder *array.RecordBuilder
 	preparedStatement  *flightsql.PreparedStatement
@@ -91,73 +87,45 @@ func NewProcessor(client *datalayers.Client, targetDB string, batchSize int, fil
 	arrowRecordBuilder := array.NewRecordBuilder(memory.NewGoAllocator(), arrowSchema)
 	arrowRecordBuilder.Reserve(batchSize)
 
-	return &processor{targetDB, batchSize, fileName, client, arrowRecordBuilder, preparedStatement}
+	return &processor{targetDB, batchSize, client, arrowRecordBuilder, preparedStatement}
 }
 
 // Init does per-worker setup needed before receiving data
 func (proc *processor) Init(workerNum int, doLoad, hashWorkers bool) {
 }
 
-// ProcessBatch handles a single batch of data
+// ProcessBatch handles a single batch of data.
 //
 // The doLoad parameter is used by the TSBS benchmark suite to test the data parsing and buffering logic.
 // If doLoad is true, the processor will load the data batch to the Datalayers server.
 // If doLoad is false, no data loading will be performed. Only data parsing and buffering would be performed.
 func (proc *processor) ProcessBatch(b targets.Batch, doLoad bool) (metricCount, rowCount uint64) {
 	batch := b.(*batch)
-	startOffset := batch.subFile[0]
-	endOffset := batch.subFile[1]
 
-	// fmt.Printf("Processor %v is reading sub file in range [%v, %v)\n", proc.id, startOffset, endOffset)
-
-	buffer := make([]byte, endOffset-startOffset)
-	bytesRead, err := DataSourceFile.ReadAt(buffer, startOffset)
-	if err != nil {
-		if err == io.EOF {
-			return metricCount, rowCount
+	for _, line := range batch.lines {
+		values := strings.Split(string(line), " ")
+		// Skip incomplete rows.
+		if len(values) != len(cpuFieldNames) {
+			continue
 		}
-		panic(fmt.Sprintf("failed to read sub file. error: %v", err))
-	}
-	if int64(bytesRead) != endOffset-startOffset {
-		panic(fmt.Sprintf("error on reading sub file. read bytes = %v, expected = %v", bytesRead, endOffset-startOffset))
+		appendRow(proc.arrowRecordBuilder, values)
+		rowCount++
 	}
 
-	lines := strings.Split(string(buffer), "\n")
+	if rowCount > 0 {
+		record := proc.arrowRecordBuilder.NewRecord()
 
-	segmentSize := proc.batchSize
-	numSegments := (len(lines) + segmentSize - 1) / segmentSize
-	for i := 0; i < numSegments; i++ {
-		start := i * segmentSize
-		end := min(start+segmentSize, len(lines))
-		segment := lines[start:end]
+		// Datalayers does not differentiate between tags and fields, all columns are regarded as metrics.
+		metricCount += uint64(record.NumCols() * record.NumRows())
 
-		for _, line := range segment {
-			values := strings.Split(line, " ")
-			// Skip incomplete rows.
-			if len(values) != len(cpuFieldNames) {
-				continue
+		if doLoad {
+			proc.preparedStatement.SetParameters(record)
+			err := proc.client.ExecuteInsertPrepare(proc.preparedStatement)
+			if err != nil {
+				log.Error(err)
 			}
-			appendRow(proc.arrowRecordBuilder, values)
 		}
-
-		if len(segment) > 0 {
-			record := proc.arrowRecordBuilder.NewRecord()
-
-			// Datalayers does not differentiate between tags and fields, all columns are regarded as metrics.
-			// FIXME(niebayes): seems we need to modify the calculation of the number of metrics.
-			metricCount += uint64(record.NumCols() * record.NumRows())
-			rowCount += uint64(record.NumRows())
-
-			if doLoad {
-				proc.preparedStatement.SetParameters(record)
-				err := proc.client.ExecuteInsertPrepare(proc.preparedStatement)
-				if err != nil {
-					log.Error(err)
-					// panic(fmt.Sprintf("failed to execute a insert prepared statement. error: %v", err))
-				}
-			}
-			record.Release()
-		}
+		record.Release()
 	}
 
 	return metricCount, rowCount
@@ -189,7 +157,6 @@ func appendFieldValue(fieldBuilder array.Builder, fieldValue string) {
 		ts, err := strconv.ParseInt(fieldValue, 10, 64)
 		if err != nil {
 			builder.AppendTime(time.Unix(0, time.Now().UnixNano()))
-			// panic(fmt.Sprintf("failed to convert a string to int64. error: %v", err))
 		} else {
 			builder.AppendTime(time.Unix(0, ts))
 		}

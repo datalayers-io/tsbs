@@ -1,10 +1,10 @@
 data-source:
   type: FILE
   file:
-    location: ./generated_data/datalayers/cpu-only-100000-3h.data
+    location: ./generated_data/datalayers/cpu-only-4000-4d.data
 loader:
   db-specific:
-    sql-endpoint: localhost:8360
+    sql-endpoint: localhost:8560
     batch-size: "10000"
     num-workers: "64"
   runner:
