@@ -99,23 +99,23 @@ func (d *Devops) parallelDegreeFor(queryKey string) int {
 		case "groupby-8host-1h-5m":
 			return 8
 		case "cpu-max-all-1host":
-			return 4
+			return 1
 		case "cpu-max-all-8host":
-			return 8
+			return 32
 		case "double-groupby-1":
-			return 4
+			return 16
 		case "double-groupby-5":
-			return 2
+			return 16
 		case "double-groupby-all":
-			return 2
-		case "high-cpu-1host":
 			return 4
+		case "high-cpu-1host":
+			return 1
 		case "high-cpu-all":
-			return 32
+			return 4
 		case "groupby-orderby-limit":
-			return 32
+			return 4
 		case "lastpoint":
-			return 32
+			return 8
 		}
 	}
 
