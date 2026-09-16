@@ -55,12 +55,15 @@ POC_SQL=(
   create.sql
   alter.sql
   sample.sql
+  rollup.sql
 )
 
-# POC root files (bench entry, config, README).
+# POC root files (bench entry, configs, README).
 POC_FILES=(
   bench.sh
   bench_config.yaml
+  bench_load_config.yaml
+  bench_query_config.yaml
   README.md
 )
 
@@ -102,8 +105,8 @@ echo "Packed Datalayers POC bundle -> ${OUTPUT_DIR}"
 echo "  bin/             : ${#BINARIES[@]} binaries"
 echo "  poc/scripts/     : ${#POC_SCRIPTS[@]} scripts + poc_hints.yaml"
 echo "  poc/load_config/ : $(ls "${OUTPUT_DIR}/poc/load_config/" | wc -l) configs"
-echo "  poc/sql/         : ${#POC_SQL[@]} files (create.sql / alter.sql / sample.sql)"
-echo "  poc/ root        : ${#POC_FILES[@]} files (bench.sh / bench_config.yaml / README)"
+echo "  poc/sql/         : ${#POC_SQL[@]} files (create.sql / alter.sql / sample.sql / rollup.sql)"
+echo "  poc/ root        : ${#POC_FILES[@]} files (bench.sh / bench_*.yaml / README)"
 echo ""
 echo "Usage on the target machine:"
 echo "  cd ${OUTPUT_DIR}"

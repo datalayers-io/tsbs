@@ -1,5 +1,8 @@
-# Datalayers TSBS POC 一键压测配置（poc/bench.sh 读取）。
-# 除 dlsql_dir / dlsql_extra_args 外均为必填；布尔开关 true/false。
+# Datalayers TSBS POC 查询专用配置（poc/bench.sh 读取）。
+# 与 bench_config.yaml 唯一区别：create_db_table=false、gen_data=false、
+# load_data=false，即只执行：生成查询(gen_queries) + 跑全部查询(run_queries)。
+# 前提：数据已由 bench_load_config.yaml（或全量 bench_config.yaml）灌入。
+# 用法：./poc/bench.sh poc/bench_query_config.yaml [smoke]
 
 # Datalayers Arrow Flight SQL 服务地址（tsbs_load 灌数、tsbs_run_queries 查询使用）
 flight_addr: localhost:8360
@@ -25,21 +28,20 @@ dldump_timeout: 600
 # 目标数据库名（建库建表/alter/压缩率计算等 SQL 使用的库）
 database: benchmark
 
-# 为 true 则用 dlsql --load-file 执行 poc/sql/create.sql 建库建表
-create_db_table: true
+# 查询配置不建库建表（数据已灌好）
+create_db_table: false
 
-# 为 true 则调用 poc/scripts/gen_data_poc.sh 生成 fresh + stale 数据
-gen_data: true
+# 查询配置不生成数据（数据已灌好）
+gen_data: false
 
 # 为 true 则调用 poc/scripts/gen_queries_poc.sh 生成全部查询，并重写 SQL hint
 gen_queries: true
 
-# 为 true 则调用 poc/scripts/load_data_poc.sh 灌入 fresh + stale 数据
-load_data: true
+# 查询配置不灌数（数据已灌好）
+load_data: false
 
-# 为 true 则在 load fresh + stale 数据完成后，用 dlsql 执行 poc/sql/rollup.sql，
-# 创建 cpu 表的 1h 窗口 rollup 表 cpu_rollup_1h
-create_rollup: true
+# 查询配置不创建 rollup（数据/rollup 已由灌数阶段建好）
+create_rollup: false
 
 # 为 true 则调用 poc/scripts/run_all_queries_poc.sh 跑全部 15 种查询
 run_queries: true

@@ -11,6 +11,8 @@
 poc/
 ├── bench.sh                    # 一键压测入口（读取 bench_config.yaml，探测并执行各步骤）
 ├── bench_config.yaml           # 压测配置（服务地址/dlsql+dldump 目录/各步骤开关/并发数）
+├── bench_load_config.yaml      # 灌数专用配置（gen_queries/run_queries=false，只建库+生成+灌数）
+├── bench_query_config.yaml     # 查询专用配置（create/gen_data/load=false，只生成+跑查询）
 ├── build/                      # 编译脚本（生成 bin/ 下的二进制 + 打包）
 │   ├── build_local_cgo.sh      #   本地一键 CGO 编译 + 打包
 │   └── build_on_kylin.sh       #   麒麟 V10 目标机上编译（换源/装 Go/装依赖/编译/打包）
@@ -20,7 +22,8 @@ poc/
 ├── sql/                        # POC 用的 SQL 文件
 │   ├── create.sql              #   建库建表（CREATE DATABASE + CREATE TABLE benchmark.cpu）
 │   ├── alter.sql               #   加列/查询/删列/查询（test_alter.sh 使用）
-│   └── sample.sql              #   建 cpu_sample/灌 1000 万行/flush/查 sst_files（压缩率用）
+│   ├── sample.sql              #   建 cpu_sample/灌 1000 万行/flush/查 sst_files（压缩率用）
+│   └── rollup.sql              #   建 cpu 的 1h 窗口 rollup 表 cpu_rollup_1h（bench.sh 用）
 ├── scripts/                    # POC 运行脚本
 │   ├── gen_data_poc.sh         #   生成 POC 数据（可选 stale 参数）
 │   ├── gen_queries_poc.sh      #   生成全部 15 种 POC 查询
@@ -126,8 +129,9 @@ poc/
   - `dlsql_timeout`：dlsql 执行 SQL 的超时秒数（默认 300，避免 DDL 卡死）
   - `dldump_timeout`：dldump 导出的超时秒数（默认 600）
   - `database`：目标数据库名（默认 benchmark）
-  - `create_db_table` / `gen_data` / `gen_queries` / `load_data` / `run_queries`：
-    各步骤开关（true/false）
+  - `create_db_table` / `gen_data` / `gen_queries` / `load_data` / `create_rollup`
+    / `run_queries`：各步骤开关（true/false），`create_rollup` 在 load 完成后建
+    cpu 的 1h rollup 表 cpu_rollup_1h
   - `query_workers`：查询并发数（run_all_queries_poc.sh 使用）
 
 - **bench.sh**：一键压测入口。
@@ -159,10 +163,15 @@ poc/
   由 `test_alter.sh` 用 `dlsql -d benchmark --load-file` 执行。
 
 - **sample.sql**：压缩率计算 SQL。建 `cpu_sample` 表（字段与 cpu 一致，
-  `PARTITIONS 1`、`memtable_size=8GiB`，可容纳 1000 万行不被动 flush）→
+  `PARTITIONS 4`、`memtable_size=2GB`、`STORAGE_TYPE=local`、`COMPACT_WINDOW=365d`）→
   `INSERT INTO cpu_sample SELECT * FROM cpu ORDER BY ts LIMIT 10000000` →
-  `FLUSH TABLE cpu_sample SYNC` → 查询 `information_schema.sst_files` 的
-  `table`/`file_size`。由 `compute_compression_ratio.sh` 执行。
+  `FLUSH TABLE cpu_sample SYNC` → `SELECT SUM(file_size) ... FROM information_schema.sst_files`
+  （用 SQL 直接求文件总大小）。由 `compute_compression_ratio.sh` 执行。
+
+- **rollup.sql**：为 cpu 表创建 1h 窗口的 rollup 表 `cpu_rollup_1h`。先
+  `FLUSH TABLE cpu SYNC` 确保全量物化，再 `DROP ROLLUP IF EXISTS`（幂等），
+  然后 `CREATE ROLLUP cpu_rollup_1h ON cpu (usage_*) GROUP BY (hostname) INTERVAL 1h`。
+  由 bench.sh 在 `create_rollup: true` 且 load 完成后执行。
 
 ### scripts/（新增）
 
@@ -199,6 +208,9 @@ poc/
 ./poc/bench.sh
 #    小规模冒烟验证（scale=1000，约 168MB）
 ./poc/bench.sh smoke
+#    灌数专用（只建库+生成+灌数） / 查询专用（只生成+跑查询）
+./poc/bench.sh poc/bench_load_config.yaml
+./poc/bench.sh poc/bench_query_config.yaml
 
 # 或分步执行：
 # 1. 编译（本地）

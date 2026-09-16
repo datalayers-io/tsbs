@@ -23,6 +23,12 @@ var cpuFieldNames []string = []string{
 	"usage_guest", "usage_guest_nice",
 }
 
+// cpuMetricCount is the number of metric fields in the cpu table (the 10 usage_*
+// columns). Although Datalayers stores tags and metrics as ordinary columns, the
+// metrics/sec benchmark statistic must be computed over the metric fields only,
+// consistent with other TSBS targets (which multiply by the metric count).
+const cpuMetricCount = 10
+
 var cpuFieldTypes []arrow.DataType = []arrow.DataType{
 	arrow.FixedWidthTypes.Timestamp_ns,
 	arrow.BinaryTypes.String,
@@ -115,8 +121,9 @@ func (proc *processor) ProcessBatch(b targets.Batch, doLoad bool) (metricCount, 
 	if rowCount > 0 {
 		record := proc.arrowRecordBuilder.NewRecord()
 
-		// Datalayers does not differentiate between tags and fields, all columns are regarded as metrics.
-		metricCount += uint64(record.NumCols() * record.NumRows())
+		// Count metrics over the metric fields only (10), not over all columns
+		// (Datalayers stores tags and metrics as ordinary columns).
+		metricCount += uint64(cpuMetricCount) * uint64(record.NumRows())
 
 		if doLoad {
 			proc.preparedStatement.SetParameters(record)

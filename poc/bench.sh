@@ -50,10 +50,12 @@ HTTP_ADDR="$(get_cfg http_addr "localhost:8361")"
 DLSQL_DIR="$(get_cfg dlsql_dir "")"
 DLSQL_EXTRA_ARGS="$(get_cfg dlsql_extra_args "")"
 DLSQL_TIMEOUT="$(get_cfg dlsql_timeout "300")"
+DATABASE="$(get_cfg database "benchmark")"
 CREATE_DB_TABLE="$(get_cfg create_db_table "true")"
 GEN_DATA="$(get_cfg gen_data "true")"
 GEN_QUERIES="$(get_cfg gen_queries "true")"
 LOAD_DATA="$(get_cfg load_data "true")"
+CREATE_ROLLUP="$(get_cfg create_rollup "false")"
 RUN_QUERIES="$(get_cfg run_queries "true")"
 QUERY_WORKERS="$(get_cfg query_workers "64")"
 
@@ -164,6 +166,16 @@ if is_true "${LOAD_DATA}"; then
   echo ""
   echo "==> load_data: 灌入 stale 数据"
   SQL_ENDPOINT="${FLIGHT_ADDR}" ./poc/scripts/load_data_poc.sh stale | tee "${LOAD_LOG}.stale"
+fi
+
+# ── 建 rollup（必须在 load fresh + stale 数据完成后）─────────────────────
+if is_true "${CREATE_ROLLUP}"; then
+  echo ""
+  echo "==> create_rollup: 用 dlsql 执行 ${SCRIPT_DIR}/sql/rollup.sql（cpu_rollup_1h, 1h 窗口, 超时 ${DLSQL_TIMEOUT}s）"
+  timeout "${DLSQL_TIMEOUT}s" "${DLSQL_BIN}" -h "${FLIGHT_HOST}" -P "${FLIGHT_PORT}" \
+    -d "${DATABASE}" --load-file "${SCRIPT_DIR}/sql/rollup.sql" \
+    || { echo "ERROR: 创建 rollup（cpu_rollup_1h）失败或超时（${DLSQL_TIMEOUT}s）。" >&2; exit 1; }
+  echo "OK  rollup 创建完成（cpu_rollup_1h, INTERVAL 1h）"
 fi
 
 # ── 跑全部查询 ───────────────────────────────────────────────────────────
