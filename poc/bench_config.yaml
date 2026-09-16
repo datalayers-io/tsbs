@@ -13,6 +13,9 @@ dlsql_dir: ""
 # 传给 dlsql 的附加参数（例如需要指定默认库时填 "-d default"；留空则不传）
 dlsql_extra_args: ""
 
+# dlsql 执行 create.sql 的超时秒数（dlsql 无内置超时，避免服务端 DDL 卡住时脚本无限等待）
+dlsql_timeout: 300
+
 # 为 true 则用 dlsql --load-file 执行 poc/create.sql 建库建表
 create_db_table: true
 

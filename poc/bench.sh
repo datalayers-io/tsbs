@@ -9,8 +9,11 @@
 # tsbs 二进制是否齐全。
 #
 # 用法：
-#   ./poc/bench.sh [config.yaml]
-#   （不传参数则使用 ./poc/bench_config.yaml）
+#   ./poc/bench.sh [config.yaml] [smoke]
+#   ./poc/bench.sh smoke
+#   - 不传参数则使用 ./poc/bench_config.yaml
+#   - 带 smoke 时进入小规模冒烟模式：POC_SCALE=1000、POC_STALE_SCALE=100
+#     （数据量约 fresh 168MB / stale 17MB），快速验证全流程
 #
 # 结果输出：./results/poc-<时间戳>/（load 日志 + 查询汇总表格）
 #
@@ -20,7 +23,17 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 cd "${REPO_DIR}"
 
-CONFIG="${1:-${SCRIPT_DIR}/bench_config.yaml}"
+SMOKE=0
+case "${1:-}" in
+  smoke)
+    SMOKE=1
+    CONFIG="${SCRIPT_DIR}/bench_config.yaml"
+    ;;
+  *)
+    CONFIG="${1:-${SCRIPT_DIR}/bench_config.yaml}"
+    if [ "${2:-}" = "smoke" ]; then SMOKE=1; fi
+    ;;
+esac
 [ -f "${CONFIG}" ] || { echo "ERROR: 配置文件不存在: ${CONFIG}" >&2; exit 1; }
 
 # ── 读取配置（扁平 key: value 的 yaml）───────────────────────────────────
@@ -36,6 +49,7 @@ FLIGHT_ADDR="$(get_cfg flight_addr "localhost:8360")"
 HTTP_ADDR="$(get_cfg http_addr "localhost:8361")"
 DLSQL_DIR="$(get_cfg dlsql_dir "")"
 DLSQL_EXTRA_ARGS="$(get_cfg dlsql_extra_args "")"
+DLSQL_TIMEOUT="$(get_cfg dlsql_timeout "300")"
 CREATE_DB_TABLE="$(get_cfg create_db_table "true")"
 GEN_DATA="$(get_cfg gen_data "true")"
 GEN_QUERIES="$(get_cfg gen_queries "true")"
@@ -44,6 +58,21 @@ RUN_QUERIES="$(get_cfg run_queries "true")"
 QUERY_WORKERS="$(get_cfg query_workers "64")"
 
 is_true() { [ "${1}" = "true" ]; }
+
+# est_size 估算数据文件大小：每台主机 12h/30s = 1440 行，约 122B/行。
+est_size() {
+  awk -v s="$1" 'BEGIN{ b=s*1440*122; if(b>=1073741824) printf "~%.1fGB", b/1073741824; else printf "~%.0fMB", b/1048576 }'
+}
+
+# smoke 冒烟模式：强制小规模（子脚本通过环境变量 POC_SCALE/POC_STALE_SCALE 感知）。
+if [ "${SMOKE}" -eq 1 ]; then
+  export POC_SCALE=1000
+  export POC_STALE_SCALE=100
+  echo ">>> SMOKE 冒烟模式：fresh scale=${POC_SCALE}（约 $(est_size 1000) 数据, 1440000 行）, "
+  echo "    stale scale=${POC_STALE_SCALE}（约 $(est_size 100) 数据, 144000 行）"
+fi
+FRESH_SCALE="${POC_SCALE:-1000000}"
+STALE_SCALE="${POC_STALE_SCALE:-100000}"
 
 RESULTS_DIR="./results/poc-$(date +%Y%m%d-%H%M%S)"
 mkdir -p "${RESULTS_DIR}"
@@ -78,6 +107,11 @@ echo "==> 探测 dlsql ..."
   || { echo "ERROR: dlsql 不可用（DLSQL_DIR 未配置或不在 PATH）: ${DLSQL_BIN}" >&2; exit 1; }
 echo "OK  dlsql: ${DLSQL_BIN}"
 
+echo "==> 探测 dlsql 连通性（10s 超时）..."
+timeout 10 "${DLSQL_BIN}" -h "${FLIGHT_HOST}" -P "${FLIGHT_PORT}" -e "select 1" >/dev/null 2>&1 \
+  || { echo "ERROR: dlsql 无法连接 Datalayers ${FLIGHT_ADDR}" >&2; exit 1; }
+echo "OK  dlsql 可连接: ${FLIGHT_ADDR}"
+
 echo "==> 探测 tsbs 二进制 ..."
 for b in tsbs_generate_data tsbs_generate_queries tsbs_load \
          tsbs_run_queries_datalayers rewrite_query_hints_config; do
@@ -88,20 +122,22 @@ echo "OK  tsbs 二进制齐全"
 # ── 建库建表 ─────────────────────────────────────────────────────────────
 if is_true "${CREATE_DB_TABLE}"; then
   echo ""
-  echo "==> create_db_table: 用 dlsql 执行 ${SCRIPT_DIR}/create.sql"
+  echo "==> create_db_table: 用 dlsql 执行 ${SCRIPT_DIR}/create.sql（超时 ${DLSQL_TIMEOUT}s）"
   # dlsql 连接的是 Arrow Flight SQL 端口（flight_addr），而非 HTTP 端口。
+  # dlsql 无内置超时，这里用 timeout 包裹避免服务端 DDL 卡住时脚本无限等待。
   # shellcheck disable=SC2086
-  "${DLSQL_BIN}" -h "${FLIGHT_HOST}" -P "${FLIGHT_PORT}" ${DLSQL_EXTRA_ARGS} \
-    --load-file "${SCRIPT_DIR}/create.sql"
+  timeout "${DLSQL_TIMEOUT}s" "${DLSQL_BIN}" -h "${FLIGHT_HOST}" -P "${FLIGHT_PORT}" \
+    ${DLSQL_EXTRA_ARGS} --load-file "${SCRIPT_DIR}/create.sql" \
+    || { echo "ERROR: 执行 create.sql 失败或超时（${DLSQL_TIMEOUT}s）。可调大 dlsql_timeout 后重试。" >&2; exit 1; }
   echo "OK  建库建表完成"
 fi
 
 # ── 生成数据 ─────────────────────────────────────────────────────────────
 if is_true "${GEN_DATA}"; then
   echo ""
-  echo "==> gen_data: 生成 fresh 数据（约 170GB，请耐心等待）"
+  echo "==> gen_data: 生成 fresh 数据（scale=${FRESH_SCALE}, 约 $(est_size "${FRESH_SCALE}")）"
   ./poc/scripts/gen_data_poc.sh
-  echo "==> gen_data: 生成 stale 数据"
+  echo "==> gen_data: 生成 stale 数据（scale=${STALE_SCALE}, 约 $(est_size "${STALE_SCALE}")）"
   ./poc/scripts/gen_data_poc.sh stale
 fi
 
@@ -124,6 +160,8 @@ if is_true "${LOAD_DATA}"; then
   echo ""
   echo "==> load_data: 灌入 fresh 数据"
   SQL_ENDPOINT="${FLIGHT_ADDR}" ./poc/scripts/load_data_poc.sh | tee "${LOAD_LOG}.fresh"
+
+  echo ""
   echo "==> load_data: 灌入 stale 数据"
   SQL_ENDPOINT="${FLIGHT_ADDR}" ./poc/scripts/load_data_poc.sh stale | tee "${LOAD_LOG}.stale"
 fi
@@ -139,7 +177,7 @@ fi
 # ── 汇总指标 ─────────────────────────────────────────────────────────────
 echo ""
 echo "================================================================"
-echo "POC 结果汇总（输出目录: ${RESULTS_DIR}）"
+echo "POC 结果汇总（输出目录: ${RESULTS_DIR}"
 echo "================================================================"
 
 if is_true "${LOAD_DATA}"; then

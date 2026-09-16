@@ -76,21 +76,30 @@ for i in "${!QUERY_TYPES[@]}"; do
     > "${log}" 2> >(tee "${log}.stderr" >&2) || true
 
   hdr=$(grep -m1 "query file" "${log}" || true)
-  pd=$(printf '%s' "${hdr}" | grep -oE "parallel_degree=\[[0-9, ]*\]" | sed -E 's/parallel_degree=//; s/\[|\]//g' | tr -d ' ' || true)
-  sr=$(printf '%s' "${hdr}" | grep -oE "skip_rollup=\[(true|false)\]" | sed -E 's/skip_rollup=//; s/\[|\]//g' || true)
+  # parallel_degree：从 SQL hint 解析；没有 parallel_degree hint 时为空 -> N/A
+  pd=$(printf '%s' "${hdr}" | grep -oE "parallel_degree=\[[0-9, ]*\]" \
+        | sed -E 's/parallel_degree=//; s/\[|\]//g' | tr -s ' ' ',' | sed -E 's/^,|,$//g' || true)
+  [ -n "${pd}" ] || pd="N/A"
+  # skip_rollup：只有 SQL hint 中出现 skip_rollup=1 才显示 true，否则 N/A
+  sr_raw=$(printf '%s' "${hdr}" | grep -oE "skip_rollup=\[(true|false)\]" \
+        | sed -E 's/skip_rollup=//; s/\[|\]//g' || true)
+  sr="N/A"
+  case "${sr_raw}" in
+    *true*) sr="true" ;;
+  esac
   mean=$(grep -oE "mean: +[0-9.]+ms" "${log}" | head -1 | grep -oE "[0-9.]+" | head -1 || true)
   qps=$(grep -oE "Overall query rate +[0-9.]+ queries/sec" "${log}" | head -1 | grep -oE "[0-9.]+" || true)
 
-  printf "%s\t%s\t%s\t%s\t%s\n" "${qt}" "${pd:-NA}" "${sr:-NA}" "${mean:-NA}" "${qps:-NA}" >> "${SUMMARY_TSV}"
+  printf "%s\t%s\t%s\t%s\t%s\n" "${qt}" "${pd}" "${sr}" "${mean:-N/A}" "${qps:-N/A}" >> "${SUMMARY_TSV}"
 done
 
 echo ""
 echo "=== POC Query Summary ==="
-printf "%-24s %-12s %-6s %12s %12s\n" "query" "parallel_degree" "skip" "mean(ms)" "qps"
-printf "%-24s %-12s %-6s %12s %12s\n" "------------------------" "------------" "------" "------------" "------------"
+printf "%-24s %-13s %-10s %12s %12s\n" "query" "parallel_degree" "skip_rollup" "mean(ms)" "qps"
+printf "%-24s %-13s %-10s %12s %12s\n" "------------------------" "-------------" "----------" "------------" "------------"
 while IFS=$'\t' read -r q pd sr mean qps; do
   [ "${q}" = "query" ] && continue
-  printf "%-24s %-12s %-6s %12s %12s\n" "${q}" "${pd}" "${sr}" "${mean}" "${qps}"
+  printf "%-24s %-13s %-10s %12s %12s\n" "${q}" "${pd}" "${sr}" "${mean}" "${qps}"
 done < "${SUMMARY_TSV}"
 echo ""
 echo "summary  : ${SUMMARY_TSV}"

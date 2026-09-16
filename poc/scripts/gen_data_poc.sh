@@ -5,14 +5,17 @@
 #   ./poc/scripts/gen_data_poc.sh          # fresh data
 #   ./poc/scripts/gen_data_poc.sh stale    # stale (out-of-date) data
 #
-# Fresh data: 1,000,000 hosts (--scale), one point every 30s (--log-interval),
+# Default fresh: 1,000,000 hosts (--scale), one point every 30s (--log-interval),
 # covering 2026-01-01 00:00:00 ~ 2026-01-01 12:00:00 UTC.
 # Total points = 1,000,000 * (12h / 30s) = 1.44e9.
 #
-# Stale data: same log-interval (30s) and window length (12h), but all
+# Default stale: same log-interval (30s) and window length (12h), but all
 # timestamps BEFORE the fresh dataset, covering 2025-12-31 00:00:00 ~ 12:00:00
 # UTC. Scale is 100,000 hosts, i.e. 10% of the fresh dataset's 1,000,000 hosts,
 # so the stale dataset is ~10% of the fresh one by total points.
+#
+# Host count can be overridden via env: POC_SCALE (fresh) / POC_STALE_SCALE
+# (stale). bench.sh smoke 模式会将两者设为 1000 / 100。
 #
 set -euo pipefail
 
@@ -50,7 +53,7 @@ OUT="./generated_data/${FORMAT}/cpu-only-${SCALE}-${DATE}-12h.data"
 
 mkdir -p "$(dirname "$OUT")"
 
-echo "Generating ${OUT} ..."
+echo "Generating ${OUT} (scale=${SCALE}, ${START_TIMESTAMP} ~ ${END_TIMESTAMP}) ..."
 
 ./bin/tsbs_generate_data \
     --format="$FORMAT" \

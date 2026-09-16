@@ -121,12 +121,15 @@ poc/
   - `http_addr`：Datalayers HTTP 地址（探测 + dlsql 连接用）
   - `dlsql_dir`：dlsql 工具目录（留空则用 PATH 中的 dlsql）
   - `dlsql_extra_args`：传给 dlsql 的附加参数（如 `-d default`）
+  - `dlsql_timeout`：dlsql 执行 create.sql 的超时秒数（默认 300，避免 DDL 卡死）
   - `create_db_table` / `gen_data` / `gen_queries` / `load_data` / `run_queries`：
     各步骤开关（true/false）
   - `query_workers`：查询并发数（run_all_queries_poc.sh 使用）
 
 - **bench.sh**：一键压测入口。
-  - 用法：`./poc/bench.sh [config.yaml]`（默认 `./poc/bench_config.yaml`）。
+  - 用法：`./poc/bench.sh [config.yaml] [smoke]`（默认 `./poc/bench_config.yaml`）。
+  - 加 `smoke` 进入冒烟模式：强制 `POC_SCALE=1000`、`POC_STALE_SCALE=100`
+    （约 fresh 168MB / stale 17MB，1,440,000 + 144,000 行），快速验证全流程。
   - 启动时探测：datalayers HTTP/Flight 端口 TCP 可通、dlsql 可用、5 个 tsbs
     二进制齐全。
   - 按配置依次执行建库建表、生成数据、生成查询、灌数、跑全部查询。
@@ -152,6 +155,8 @@ poc/
 ```bash
 # 0. 一键压测（推荐）：先改好 poc/bench_config.yaml，然后
 ./poc/bench.sh
+#    小规模冒烟验证（scale=1000，约 168MB）
+./poc/bench.sh smoke
 
 # 或分步执行：
 # 1. 编译（本地）

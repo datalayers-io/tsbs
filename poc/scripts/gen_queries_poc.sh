@@ -44,7 +44,7 @@ for QUERY_TYPE in "${QUERY_TYPES[@]}"; do
 
   mkdir -p "$(dirname "$OUT")"
 
-  echo "Generating ${OUT} ..."
+  echo "Generating ${OUT} (scale=${SCALE}, ${START_TIMESTAMP} ~ ${END_TIMESTAMP}) ..."
 
   ./bin/tsbs_generate_queries \
     --format="$FORMAT" \
