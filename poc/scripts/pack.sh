@@ -45,13 +45,22 @@ POC_SCRIPTS=(
   rewrite_queries_poc.sh
   run_queries_poc.sh
   run_all_queries_poc.sh
+  bench_common.sh
+  test_alter.sh
+  compute_compression_ratio.sh
 )
 
-# POC root files (bench entry, config, create.sql, README).
+# POC SQL files under poc/sql.
+POC_SQL=(
+  create.sql
+  alter.sql
+  sample.sql
+)
+
+# POC root files (bench entry, config, README).
 POC_FILES=(
   bench.sh
   bench_config.yaml
-  create.sql
   README.md
 )
 
@@ -70,7 +79,8 @@ done
 mkdir -p \
   "${OUTPUT_DIR}/bin" \
   "${OUTPUT_DIR}/poc/scripts" \
-  "${OUTPUT_DIR}/poc/load_config"
+  "${OUTPUT_DIR}/poc/load_config" \
+  "${OUTPUT_DIR}/poc/sql"
 
 for b in "${BINARIES[@]}"; do
   cp "${REPO_DIR}/bin/${b}" "${OUTPUT_DIR}/bin/"
@@ -81,6 +91,9 @@ for s in "${POC_SCRIPTS[@]}"; do
 done
 cp "${REPO_DIR}/poc/scripts/poc_hints.yaml" "${OUTPUT_DIR}/poc/scripts/"
 cp "${REPO_DIR}/poc/load_config/"*.yaml "${OUTPUT_DIR}/poc/load_config/"
+for f in "${POC_SQL[@]}"; do
+  cp "${REPO_DIR}/poc/sql/${f}" "${OUTPUT_DIR}/poc/sql/"
+done
 for f in "${POC_FILES[@]}"; do
   cp "${REPO_DIR}/poc/${f}" "${OUTPUT_DIR}/poc/"
 done
@@ -89,7 +102,8 @@ echo "Packed Datalayers POC bundle -> ${OUTPUT_DIR}"
 echo "  bin/             : ${#BINARIES[@]} binaries"
 echo "  poc/scripts/     : ${#POC_SCRIPTS[@]} scripts + poc_hints.yaml"
 echo "  poc/load_config/ : $(ls "${OUTPUT_DIR}/poc/load_config/" | wc -l) configs"
-echo "  poc/ root        : ${#POC_FILES[@]} files (bench.sh / bench_config.yaml / create.sql / README)"
+echo "  poc/sql/         : ${#POC_SQL[@]} files (create.sql / alter.sql / sample.sql)"
+echo "  poc/ root        : ${#POC_FILES[@]} files (bench.sh / bench_config.yaml / README)"
 echo ""
 echo "Usage on the target machine:"
 echo "  cd ${OUTPUT_DIR}"
@@ -101,3 +115,5 @@ echo "  ./poc/scripts/rewrite_queries_poc.sh"
 echo "  ./poc/scripts/load_data_poc.sh [stale]"
 echo "  ./poc/scripts/run_queries_poc.sh <workers> <query-number>"
 echo "  ./poc/scripts/run_all_queries_poc.sh <workers>"
+echo "  ./poc/scripts/test_alter.sh"
+echo "  ./poc/scripts/compute_compression_ratio.sh"

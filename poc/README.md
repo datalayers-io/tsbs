@@ -10,14 +10,17 @@
 ```
 poc/
 ├── bench.sh                    # 一键压测入口（读取 bench_config.yaml，探测并执行各步骤）
-├── bench_config.yaml           # 压测配置（服务地址/dlsql 目录/各步骤开关/并发数）
-├── create.sql                  # 建库建表 SQL（CREATE DATABASE + CREATE TABLE benchmark.cpu）
+├── bench_config.yaml           # 压测配置（服务地址/dlsql+dldump 目录/各步骤开关/并发数）
 ├── build/                      # 编译脚本（生成 bin/ 下的二进制 + 打包）
 │   ├── build_local_cgo.sh      #   本地一键 CGO 编译 + 打包
 │   └── build_on_kylin.sh       #   麒麟 V10 目标机上编译（换源/装 Go/装依赖/编译/打包）
 ├── load_config/                # POC 灌数配置（tsbs_load 使用）
 │   ├── load_data_poc.yaml      #   灌 fresh 数据（2026-01-01 00:00~12:00）
 │   └── load_stale_data_poc.yaml#   灌 stale 数据（2025-12-31 00:00~12:00）
+├── sql/                        # POC 用的 SQL 文件
+│   ├── create.sql              #   建库建表（CREATE DATABASE + CREATE TABLE benchmark.cpu）
+│   ├── alter.sql               #   加列/查询/删列/查询（test_alter.sh 使用）
+│   └── sample.sql              #   建 cpu_sample/灌 1000 万行/flush/查 sst_files（压缩率用）
 ├── scripts/                    # POC 运行脚本
 │   ├── gen_data_poc.sh         #   生成 POC 数据（可选 stale 参数）
 │   ├── gen_queries_poc.sh      #   生成全部 15 种 POC 查询
@@ -26,6 +29,9 @@ poc/
 │   ├── load_data_poc.sh        #   灌数据（可选 stale 参数，读 load_config/ 对应 yaml）
 │   ├── run_queries_poc.sh      #   运行某一种查询（workers + 查询编号 1~15）
 │   ├── run_all_queries_poc.sh  #   跑全部 15 种查询，实时进度 + 汇总表格
+│   ├── bench_common.sh        #   公共函数：读 bench_config.yaml + 探测 dlsql/dldump/端口
+│   ├── test_alter.sh           #   加列/删列验证（执行 sql/alter.sql）
+│   ├── compute_compression_ratio.sh  #   cpu_sample 压缩率计算（SST vs CSV）
 │   └── pack.sh                 #   把二进制 + 脚本 + 配置打包成可直接运行的目录
 └── README.md                   # 本文档
 ```
@@ -111,17 +117,15 @@ poc/
 
 ### 根目录文件
 
-- **create.sql**：建库建表 SQL。`CREATE DATABASE IF NOT EXISTS benchmark;` +
-  `CREATE TABLE IF NOT EXISTS benchmark.cpu (...)`，表结构与 TSBS datalayers
-  加载器写入的 cpu 表对齐（ts/标签 STRING/usage_* INT64、时间键 ts、按
-  hostname 哈希分片）。由 bench.sh 用 `dlsql --load-file` 执行。
-
 - **bench_config.yaml**：一键压测配置。字段：
-  - `flight_addr`：Arrow Flight SQL 地址（灌数/查询用）
-  - `http_addr`：Datalayers HTTP 地址（探测 + dlsql 连接用）
+  - `flight_addr`：Arrow Flight SQL 地址（灌数/查询/dlsql/dldump 连接用）
+  - `http_addr`：Datalayers HTTP 地址（探测用）
   - `dlsql_dir`：dlsql 工具目录（留空则用 PATH 中的 dlsql）
+  - `dldump_dir`：dldump 工具目录（留空则用 PATH 中的 dldump）
   - `dlsql_extra_args`：传给 dlsql 的附加参数（如 `-d default`）
-  - `dlsql_timeout`：dlsql 执行 create.sql 的超时秒数（默认 300，避免 DDL 卡死）
+  - `dlsql_timeout`：dlsql 执行 SQL 的超时秒数（默认 300，避免 DDL 卡死）
+  - `dldump_timeout`：dldump 导出的超时秒数（默认 600）
+  - `database`：目标数据库名（默认 benchmark）
   - `create_db_table` / `gen_data` / `gen_queries` / `load_data` / `run_queries`：
     各步骤开关（true/false）
   - `query_workers`：查询并发数（run_all_queries_poc.sh 使用）
@@ -133,13 +137,51 @@ poc/
   - 启动时探测：datalayers HTTP/Flight 端口 TCP 可通、dlsql 可用、5 个 tsbs
     二进制齐全。
   - 按配置依次执行建库建表、生成数据、生成查询、灌数、跑全部查询。
-  - 建库建表用 `dlsql --load-file create.sql`，**dlsql 连接的是 Arrow Flight SQL
-    端口（flight_addr），不是 HTTP 端口**。
+  - 建库建表用 `dlsql --load-file poc/sql/create.sql`，**dlsql 连接的是 Arrow
+    Flight SQL 端口（flight_addr），不是 HTTP 端口**。
   - 灌数/查询结果写入 `./results/poc-<时间戳>/`，最后打印 load 指标
     （tsbs 原生只提供 rows/sec / metrics/sec 吞吐，无单条写入延迟）与
     查询汇总表格（由 run_all_queries_poc.sh 输出）。
   - 注：load 与查询的实时进度由 tsbs 自身打印——load 按 `reporting-period`
     输出 rows/s 到 stdout，查询按 `--print-interval` 输出到 stderr，脚本会透传。
+
+### sql/
+
+- **create.sql**：建库建表 SQL。`CREATE DATABASE IF NOT EXISTS benchmark;` +
+  `CREATE TABLE IF NOT EXISTS benchmark.cpu (...)`，表结构与 TSBS datalayers
+  加载器写入的 cpu 表对齐（ts/标签 STRING/usage_* INT64、时间键 ts、按
+  hostname 哈希分片）。由 bench.sh 用 `dlsql --load-file` 执行。
+
+- **alter.sql**：加列/删列验证。顺序执行：`alter table cpu add column tmp` →
+  `select hostname, tmp from cpu order by ts desc limit 10` →
+  `alter table cpu remove column tmp` →
+  `select hostname from cpu order by ts desc limit 10`。表名未加库前缀，
+  由 `test_alter.sh` 用 `dlsql -d benchmark --load-file` 执行。
+
+- **sample.sql**：压缩率计算 SQL。建 `cpu_sample` 表（字段与 cpu 一致，
+  `PARTITIONS 1`、`memtable_size=8GiB`，可容纳 1000 万行不被动 flush）→
+  `INSERT INTO cpu_sample SELECT * FROM cpu ORDER BY ts LIMIT 10000000` →
+  `FLUSH TABLE cpu_sample SYNC` → 查询 `information_schema.sst_files` 的
+  `table`/`file_size`。由 `compute_compression_ratio.sh` 执行。
+
+### scripts/（新增）
+
+- **bench_common.sh**：公共函数库。`load_bench_config` 读取 bench_config.yaml，
+  `probe_bench_env` 探测 datalayers HTTP/Flight 端口、dlsql、dldump。
+  被 test_alter.sh / compute_compression_ratio.sh source。
+
+- **test_alter.sh**：验证加列/删列。用 `dlsql -d <database> --load-file`
+  顺序执行 `sql/alter.sql`。用法：`./poc/scripts/test_alter.sh [config.yaml]`。
+
+- **compute_compression_ratio.sh**：计算 cpu_sample 的压缩率。
+  - 流程：探测 → `drop cpu_sample`（幂等）→ 执行 `sql/sample.sql` →
+    从 sst_files 输出求和 `file_size`（datalayers 数据大小）→ 用
+    `dldump -f csv` 导出 cpu_sample 到 CSV → 计算 csv 大小 → 打印三组比值：
+    1) datalayers 是 csv 的百分之多少；2) csv 是 datalayers 的多少倍；
+    3) datalayers:csv（datalayers 取 1）。
+  - 依赖 `dldump`（`-h/-P/-u/-p/-d/-t/-o/-f csv`，输出 `<output>/<db>_<table>.csv`）。
+  - 用法：`./poc/scripts/compute_compression_ratio.sh [config.yaml]`。
+  - 输出：`./results/compression-<时间戳>/`。
 
 ## 依赖的二进制
 
@@ -165,7 +207,7 @@ poc/
 ./poc/build/build_on_kylin.sh
 
 # 2. 建库建表（bench.sh 的 create_db_table 步骤，等价于）
-dlsql -h <host> -P <http_port> --load-file poc/create.sql
+dlsql -h <host> -P <http_port> --load-file poc/sql/create.sql
 
 # 3. 生成数据（fresh；加 stale 生成过期数据）
 ./poc/scripts/gen_data_poc.sh
@@ -186,6 +228,12 @@ dlsql -h <host> -P <http_port> --load-file poc/create.sql
 
 # 8. 跑全部 15 种查询并汇总
 ./poc/scripts/run_all_queries_poc.sh 64
+
+# 9. 加列/删列验证
+./poc/scripts/test_alter.sh
+
+# 10. 压缩率计算（cpu_sample：SST vs CSV）
+./poc/scripts/compute_compression_ratio.sh
 ```
 
 ## 注意事项

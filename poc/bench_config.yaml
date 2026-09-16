@@ -10,13 +10,22 @@ http_addr: localhost:8361
 # dlsql 工具目录（填绝对路径，例如 /opt/datalayers/bin；留空则直接在 PATH 中执行 dlsql）
 dlsql_dir: ""
 
+# dldump 工具目录（填绝对路径，例如 /opt/datalayers/bin；留空则直接在 PATH 中执行 dldump）
+dldump_dir: ""
+
 # 传给 dlsql 的附加参数（例如需要指定默认库时填 "-d default"；留空则不传）
 dlsql_extra_args: ""
 
 # dlsql 执行 create.sql 的超时秒数（dlsql 无内置超时，避免服务端 DDL 卡住时脚本无限等待）
 dlsql_timeout: 300
 
-# 为 true 则用 dlsql --load-file 执行 poc/create.sql 建库建表
+# dldump 导出数据的超时秒数（避免大数据量导出时脚本无限等待）
+dldump_timeout: 600
+
+# 目标数据库名（建库建表/alter/压缩率计算等 SQL 使用的库）
+database: benchmark
+
+# 为 true 则用 dlsql --load-file 执行 poc/sql/create.sql 建库建表
 create_db_table: true
 
 # 为 true 则调用 poc/scripts/gen_data_poc.sh 生成 fresh + stale 数据

@@ -122,12 +122,12 @@ echo "OK  tsbs 二进制齐全"
 # ── 建库建表 ─────────────────────────────────────────────────────────────
 if is_true "${CREATE_DB_TABLE}"; then
   echo ""
-  echo "==> create_db_table: 用 dlsql 执行 ${SCRIPT_DIR}/create.sql（超时 ${DLSQL_TIMEOUT}s）"
+  echo "==> create_db_table: 用 dlsql 执行 ${SCRIPT_DIR}/sql/create.sql（超时 ${DLSQL_TIMEOUT}s）"
   # dlsql 连接的是 Arrow Flight SQL 端口（flight_addr），而非 HTTP 端口。
   # dlsql 无内置超时，这里用 timeout 包裹避免服务端 DDL 卡住时脚本无限等待。
   # shellcheck disable=SC2086
   timeout "${DLSQL_TIMEOUT}s" "${DLSQL_BIN}" -h "${FLIGHT_HOST}" -P "${FLIGHT_PORT}" \
-    ${DLSQL_EXTRA_ARGS} --load-file "${SCRIPT_DIR}/create.sql" \
+    ${DLSQL_EXTRA_ARGS} --load-file "${SCRIPT_DIR}/sql/create.sql" \
     || { echo "ERROR: 执行 create.sql 失败或超时（${DLSQL_TIMEOUT}s）。可调大 dlsql_timeout 后重试。" >&2; exit 1; }
   echo "OK  建库建表完成"
 fi
