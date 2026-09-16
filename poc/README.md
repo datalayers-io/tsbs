@@ -64,12 +64,15 @@ poc/
     `2026-01-01 00:00:00 ~ 12:00:00`（约 1.44e9 个点）。
   - `stale` 参数：stale 数据 —— 同样的 30s 间隔与 12h 窗口，但时间在
     `2025-12-31 00:00:00 ~ 12:00:00`；`--scale=100000`，约为 fresh 数据量的 10%。
+  - 可用环境变量 `POC_SCALE` / `POC_STALE_SCALE` 覆盖主机数（小规模验证时用）。
   - 产物：`generated_data/datalayers/cpu-only-<scale>-<日期>-12h.data`。
 
 - **gen_queries_poc.sh**：自包含的查询生成脚本（不依赖 `my_scripts/generate_query.sh`）。
   为 15 种查询类型逐个调用 `bin/tsbs_generate_queries`，scale=1000000、
   时间范围 2026-01-01 00:00 ~ 12:00（与 fresh 数据对齐），每个类型 `--queries`
-  默认 1000 条（可用环境变量 `NUM_QUERIES` 覆盖）。
+  默认 100 条（可用环境变量 `NUM_QUERIES` 覆盖，scale 可用 `POC_SCALE` 覆盖）。
+  - 注意：部分查询类型需要 8 台主机（single-groupby-*-8-1、cpu-max-all-8），
+    scale 需 ≥ 8，否则生成时会 panic。
   - 产物：`generated_query/datalayers/cpu-only/poc/<查询类型>.query`
 
 - **poc_hints.yaml**：每个查询类型的 SQL hint 配置（`parallel_degree` 与
@@ -83,7 +86,8 @@ poc/
 - **load_data_poc.sh**：灌数据。
   - 无参：按 `poc/load_config/load_data_poc.yaml` 灌 fresh 数据。
   - `stale` 参数：按 `poc/load_config/load_stale_data_poc.yaml` 灌 stale 数据。
-  - 可用环境变量 `SQL_ENDPOINT` 覆盖 Arrow Flight 地址（bench.sh 会传）。
+  - 数据文件路径按 `POC_SCALE`/`POC_STALE_SCALE` 自动推导（与 gen_data_poc.sh 产物一致），
+    也可用 `DATA_FILE` 显式指定；`SQL_ENDPOINT` 覆盖 Arrow Flight 地址。
 
 - **run_queries_poc.sh**：运行单个查询。参数：`<workers> <query-number(1~15)>`。
   查询编号与 `my_scripts/run_queries_datalayers.sh` 一致：
@@ -126,6 +130,8 @@ poc/
   - 启动时探测：datalayers HTTP/Flight 端口 TCP 可通、dlsql 可用、5 个 tsbs
     二进制齐全。
   - 按配置依次执行建库建表、生成数据、生成查询、灌数、跑全部查询。
+  - 建库建表用 `dlsql --load-file create.sql`，**dlsql 连接的是 Arrow Flight SQL
+    端口（flight_addr），不是 HTTP 端口**。
   - 灌数/查询结果写入 `./results/poc-<时间戳>/`，最后打印 load 指标
     （tsbs 原生只提供 rows/sec / metrics/sec 吞吐，无单条写入延迟）与
     查询汇总表格（由 run_all_queries_poc.sh 输出）。

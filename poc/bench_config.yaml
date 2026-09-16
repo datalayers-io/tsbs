@@ -4,8 +4,8 @@
 # Datalayers Arrow Flight SQL 服务地址（tsbs_load 灌数、tsbs_run_queries 查询使用）
 flight_addr: localhost:8360
 
-# Datalayers HTTP 服务地址（bench.sh 用它探测服务是否开启，并作为 dlsql 的连接地址）
-http_addr: localhost:8080
+# Datalayers HTTP 服务地址（bench.sh 用它探测服务是否开启）
+http_addr: localhost:8361
 
 # dlsql 工具目录（填绝对路径，例如 /opt/datalayers/bin；留空则直接在 PATH 中执行 dlsql）
 dlsql_dir: ""
@@ -29,4 +29,4 @@ load_data: true
 run_queries: true
 
 # 查询并发 worker 数（run_all_queries_poc.sh 使用）
-query_workers: 64
+query_workers: 8

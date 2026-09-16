@@ -32,6 +32,11 @@ CREATE TABLE IF NOT EXISTS benchmark.cpu (
     usage_guest_nice INT64,
     timestamp key(ts)
 )
-PARTITION BY HASH(hostname) PARTITIONS 64
+PARTITION BY HASH(hostname) PARTITIONS 6
 ENGINE=TimeSeries
-with(memtable_size=2048MiB);
+with(
+    MEMTABLE_SIZE=2GB,
+    UPDATE_MODE=APPEND,
+    COMPACT_MODE=DISABLE,
+    STORAGE_TYPE=S3
+);

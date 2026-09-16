@@ -33,7 +33,7 @@ get_cfg() {
 }
 
 FLIGHT_ADDR="$(get_cfg flight_addr "localhost:8360")"
-HTTP_ADDR="$(get_cfg http_addr "localhost:8080")"
+HTTP_ADDR="$(get_cfg http_addr "localhost:8361")"
 DLSQL_DIR="$(get_cfg dlsql_dir "")"
 DLSQL_EXTRA_ARGS="$(get_cfg dlsql_extra_args "")"
 CREATE_DB_TABLE="$(get_cfg create_db_table "true")"
@@ -89,8 +89,9 @@ echo "OK  tsbs 二进制齐全"
 if is_true "${CREATE_DB_TABLE}"; then
   echo ""
   echo "==> create_db_table: 用 dlsql 执行 ${SCRIPT_DIR}/create.sql"
+  # dlsql 连接的是 Arrow Flight SQL 端口（flight_addr），而非 HTTP 端口。
   # shellcheck disable=SC2086
-  "${DLSQL_BIN}" -h "${HTTP_HOST}" -P "${HTTP_PORT}" ${DLSQL_EXTRA_ARGS} \
+  "${DLSQL_BIN}" -h "${FLIGHT_HOST}" -P "${FLIGHT_PORT}" ${DLSQL_EXTRA_ARGS} \
     --load-file "${SCRIPT_DIR}/create.sql"
   echo "OK  建库建表完成"
 fi
