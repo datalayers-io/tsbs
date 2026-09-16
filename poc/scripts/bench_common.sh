@@ -60,6 +60,21 @@ tcp_reachable() { # tcp_reachable <host> <port>
   timeout 3 bash -c "exec 3<>/dev/tcp/${host}/${port}" 2>/dev/null
 }
 
+# run_sql_file <sql-file>：逐条打印并执行 SQL 文件中的每条语句（用 dlsql -e）。
+# 按分号切分语句、剔除 -- 注释；每条执行前打印 "==> SQL: <stmt>"。
+run_sql_file() {
+  local sql_file="$1" stmt
+  [ -f "${sql_file}" ] || die "SQL 文件不存在: ${sql_file}"
+  while IFS= read -r stmt; do
+    [ -z "${stmt}" ] && continue
+    echo "==> SQL: ${stmt}"
+    timeout "${DLSQL_TIMEOUT}s" "${DLSQL_BIN}" -h "${FLIGHT_HOST}" -P "${FLIGHT_PORT}" \
+      -d "${DATABASE}" -e "${stmt}" \
+      || die "执行 SQL 失败: ${stmt}"
+  done < <(grep -vE '^[[:space:]]*--' "${sql_file}" \
+           | awk 'BEGIN{RS=";"} { gsub(/[[:space:]]+/," ",$0); gsub(/^ | $/,"",$0); if (length($0)>0) print $0 ";" }')
+}
+
 # probe_bench_env：探测 datalayers 联通性 + dlsql + dldump
 probe_bench_env() {
   info "探测 Datalayers HTTP 端口 ${HTTP_ADDR} ..."

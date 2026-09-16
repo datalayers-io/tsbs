@@ -47,14 +47,13 @@ timeout "${DLSQL_TIMEOUT}s" "${DLSQL_BIN}" -h "${FLIGHT_HOST}" -P "${FLIGHT_PORT
 
 # ── 2. 执行 sample.sql：建表 + 灌 1000 万行 + flush + 查 sst_files ─────────
 info "执行 ${REPO_DIR}/poc/sql/sample.sql（建表/灌数据/flush/查 sst_files，超时 ${DLSQL_TIMEOUT}s）"
-timeout "${DLSQL_TIMEOUT}s" "${DLSQL_BIN}" -h "${FLIGHT_HOST}" -P "${FLIGHT_PORT}" \
-  -d "${DATABASE}" --load-file "${REPO_DIR}/poc/sql/sample.sql" | tee "${SAMPLE_OUT}"
+run_sql_file "${REPO_DIR}/poc/sql/sample.sql" | tee "${SAMPLE_OUT}"
 
-# ── 3. 求和 sst_files 的 file_size（datalayers 数据文件大小）──────────────
-# 输出形如：| cpu_sample | 123456 | ...；用 | 分割取第 3 列（file_size）求和。
-DL_SIZE="$(awk -F'|' '{ gsub(/[^0-9]/,"",$3); sum+=$3 } END{ print sum+0 }' "${SAMPLE_OUT}")"
-if [ "${DL_SIZE}" -le 0 ]; then
-  echo "WARN: 未从 sst_files 输出解析到 file_size，原始输出：" >&2
+# ── 3. 从 sst_files 取 SUM(file_size)（求和由 SQL 完成，脚本只解析单个值）──
+# 输出形如：| total_file_size | 下的单值行 | 15559498 |，取第 2 个 | 字段。
+DL_SIZE="$(awk -F'|' '/\|/ { gsub(/[^0-9]/,"",$2); if ($2 != "") { print $2; exit } }' "${SAMPLE_OUT}")"
+if [ -z "${DL_SIZE}" ] || [ "${DL_SIZE}" -le 0 ]; then
+  echo "WARN: 未从 sst_files 输出解析到 SUM(file_size)，原始输出：" >&2
   sed -n '/sst_files\|file_size\|cpu_sample/p' "${SAMPLE_OUT}" >&2 || true
 fi
 echo "datalayers cpu_sample 数据文件大小: ${DL_SIZE} bytes"
@@ -62,9 +61,10 @@ echo "datalayers cpu_sample 数据文件大小: ${DL_SIZE} bytes"
 # ── 4. dldump 导出 cpu_sample 到 CSV ──────────────────────────────────────
 DUMP_DIR="${RESULTS_DIR}/dump"
 rm -rf "${DUMP_DIR}"
+DLDUMP_CMD="${DLDUMP_BIN} -h ${FLIGHT_HOST} -P ${FLIGHT_PORT} -u admin -p public -d ${DATABASE} -t cpu_sample -o ${DUMP_DIR} -f csv"
+echo "# dldump 执行命令: ${DLDUMP_CMD}"
 info "dldump 导出 ${DATABASE}.cpu_sample -> csv（超时 ${DLDUMP_TIMEOUT}s）"
-timeout "${DLDUMP_TIMEOUT}s" "${DLDUMP_BIN}" -h "${FLIGHT_HOST}" -P "${FLIGHT_PORT}" \
-  -u admin -p public -d "${DATABASE}" -t cpu_sample -o "${DUMP_DIR}" -f csv \
+timeout "${DLDUMP_TIMEOUT}s" ${DLDUMP_CMD} \
   || die "dldump 导出失败"
 
 CSV="${DUMP_DIR}/${DATABASE}_cpu_sample.csv"

@@ -22,7 +22,6 @@ cd "${REPO_DIR}"
 load_bench_config
 probe_bench_env
 
-info "用 dlsql 执行 ${REPO_DIR}/poc/sql/alter.sql（库=${DATABASE}，超时 ${DLSQL_TIMEOUT}s）"
-timeout "${DLSQL_TIMEOUT}s" "${DLSQL_BIN}" -h "${FLIGHT_HOST}" -P "${FLIGHT_PORT}" \
-  -d "${DATABASE}" --load-file "${REPO_DIR}/poc/sql/alter.sql"
+info "用 dlsql 逐条执行 ${REPO_DIR}/poc/sql/alter.sql（库=${DATABASE}，超时 ${DLSQL_TIMEOUT}s）"
+run_sql_file "${REPO_DIR}/poc/sql/alter.sql"
 echo "OK  alter 验证完成（加列/查询/删列/查询均执行成功）"
