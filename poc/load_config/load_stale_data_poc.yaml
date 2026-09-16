@@ -1,0 +1,24 @@
+data-source:
+  type: FILE
+  file:
+    location: ./generated_data/datalayers/cpu-only-100000-20251231-12h.data
+loader:
+  db-specific:
+    sql-endpoint: localhost:8360
+    batch-size: "10000"
+    num-workers: "6"
+  runner:
+    workers: "6"
+    batch-size: "10000"
+    flow-control: false
+    hash-workers: true
+    insert-intervals: ""
+    limit: "0"
+    reporting-period: 10s
+    seed: 42
+    channel-capacity: "0"
+    db-name: benchmark
+    do-abort-on-exist: false
+    do-create-db: false
+    do-load: true
+  target: datalayers

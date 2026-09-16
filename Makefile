@@ -8,21 +8,26 @@ GOGET=$(GOCMD) get
 GOMOD=$(GOCMD) mod
 GOFMT=$(GOCMD) fmt
 
-.PHONY: all generators loaders runners lint fmt checkfmt
+.PHONY: all generators loaders runners tools lint fmt checkfmt
 
-all: generators loaders runners
+# Only the Datalayers benchmark pipeline binaries are built here.
+# Influx/TimescaleDB loaders/runners and the other Datalayers helper tools
+# (cmd/dump_dl_query etc.) are intentionally excluded; build them manually.
+all: generators loaders runners tools
 
 generators: tsbs_generate_data \
 			tsbs_generate_queries
 
-# loaders: tsbs_load
-loaders: tsbs_load tsbs_load_influx
-# 		 tsbs_load_timescaledb
+loaders: tsbs_load
 
-runners: tsbs_run_queries_datalayers tsbs_run_queries_influx
-# runners: tsbs_run_queries_influx \
-# 		 tsbs_run_queries_timescaledb \
-# 		 tsbs_run_queries_datalayers
+runners: tsbs_run_queries_datalayers
+
+tools: rewrite_query_hints_config
+
+rewrite_query_hints_config:
+	$(GOGET) ./cmd/rewrite_query_hints_config
+	$(GOBUILD) -o bin/rewrite_query_hints_config ./cmd/rewrite_query_hints_config
+	$(GOINSTALL) ./cmd/rewrite_query_hints_config
 
 test:
 	$(GOTEST) -v ./...

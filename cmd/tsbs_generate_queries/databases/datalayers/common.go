@@ -101,11 +101,11 @@ func (d *Devops) parallelDegreeFor(queryKey string) int {
 		case "cpu-max-all-1host":
 			return 1
 		case "cpu-max-all-8host":
-			return 32
+			return 8
 		case "double-groupby-1":
-			return 16
+			return 4
 		case "double-groupby-5":
-			return 16
+			return 4
 		case "double-groupby-all":
 			return 4
 		case "high-cpu-1host":

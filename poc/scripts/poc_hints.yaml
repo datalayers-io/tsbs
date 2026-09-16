@@ -1,0 +1,59 @@
+# Per-query SQL hint config for the Datalayers POC queries.
+# Keys are the .query file stems (query type names), matching the numbering
+# used by run_queries_poc.sh. The "default" section is applied to any query
+# type not listed below.
+#
+# Usage:
+#   ./bin/rewrite_query_hints_config ./poc/scripts/poc_hints.yaml \
+#       ./generated_query/datalayers/cpu-only/poc
+#
+default:
+  parallel_degree: 8
+  skip_rollup: false
+
+queries:
+  single-groupby-1-1-1:
+    parallel_degree: 1
+    skip_rollup: false
+  single-groupby-1-1-12:
+    parallel_degree: 1
+    skip_rollup: false
+  single-groupby-1-8-1:
+    parallel_degree: 8
+    skip_rollup: false
+  single-groupby-5-1-1:
+    parallel_degree: 1
+    skip_rollup: false
+  single-groupby-5-1-12:
+    parallel_degree: 1
+    skip_rollup: false
+  single-groupby-5-8-1:
+    parallel_degree: 8
+    skip_rollup: false
+  cpu-max-all-1:
+    parallel_degree: 1
+    skip_rollup: false
+  cpu-max-all-8:
+    parallel_degree: 8
+    skip_rollup: false
+  double-groupby-1:
+    parallel_degree: 4
+    skip_rollup: false
+  double-groupby-5:
+    parallel_degree: 4
+    skip_rollup: false
+  double-groupby-all:
+    parallel_degree: 4
+    skip_rollup: false
+  high-cpu-1:
+    parallel_degree: 1
+    skip_rollup: false
+  high-cpu-all:
+    parallel_degree: 4
+    skip_rollup: false
+  lastpoint:
+    parallel_degree: 8
+    skip_rollup: false
+  groupby-orderby-limit:
+    parallel_degree: 4
+    skip_rollup: false

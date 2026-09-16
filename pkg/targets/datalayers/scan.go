@@ -50,23 +50,48 @@ func (ds *dataSource) Headers() *common.GeneratedDataHeaders {
 	return nil
 }
 
-// PointIndexer determines the index of the Batch (and subsequently the channel)
-// that a particular point belongs to.
+// pointIndexer routes each point to the worker matching the Datalayers server's
+// hash partition for the point's partition key (hostname). The hash must be
+// identical to the server's (see fxhash.go), and the number of client workers
+// must equal the server's partition count so that worker i maps to partition i.
+//
+// Since the data file is globally time-ordered and each worker only keeps the
+// rows whose hostname belongs to it, every worker's stream stays time-ordered,
+// so each server partition receives time-ordered data.
 type pointIndexer struct {
-	cursor        uint
 	maxPartitions uint
 }
 
 // Creates a new point indexer.
 func NewPointIndexer(maxPartitions uint) targets.PointIndexer {
-	return &pointIndexer{cursor: 0, maxPartitions: maxPartitions}
+	return &pointIndexer{maxPartitions: maxPartitions}
 }
 
-// GetIndex returns a partition for the given Point
-func (indexer *pointIndexer) GetIndex(_ data.LoadedPoint) uint {
-	index := indexer.cursor % indexer.maxPartitions
-	indexer.cursor += 1
-	return index
+// hostnameBytes extracts the `hostname` (2nd whitespace-separated field) from a
+// datalayers data line: "<ts> <hostname> <region> <datacenter> ...".
+func hostnameBytes(line []byte) []byte {
+	i := 0
+	for i < len(line) && line[i] != ' ' {
+		i++
+	}
+	if i >= len(line) {
+		return nil
+	}
+	i++ // skip the space after ts
+	start := i
+	for i < len(line) && line[i] != ' ' {
+		i++
+	}
+	return line[start:i]
+}
+
+// GetIndex returns the hash partition of the given Point.
+func (indexer *pointIndexer) GetIndex(point data.LoadedPoint) uint {
+	line, ok := point.Data.([]byte)
+	if !ok {
+		return 0
+	}
+	return FxPartitionIndexBytes(hostnameBytes(line), indexer.maxPartitions)
 }
 
 // Batch is an aggregate of points for a particular data system.
