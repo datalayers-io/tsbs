@@ -22,8 +22,8 @@ require (
 	github.com/kshvakov/clickhouse v1.3.11
 	github.com/lib/pq v1.3.0
 	github.com/pkg/errors v0.9.1
-	github.com/prometheus/common v0.13.0
 	github.com/shirou/gopsutil v3.21.3+incompatible
+	github.com/sirupsen/logrus v1.6.0
 	github.com/spf13/cobra v1.0.0
 	github.com/spf13/pflag v1.0.5
 	github.com/timescale/promscale v0.0.0-20201006153045-6a66a36f5c84
@@ -635,7 +635,6 @@ require (
 	github.com/shurcooL/httpfs v0.0.0-20190707220628-8d4bc4ba7749 // indirect
 	github.com/shurcooL/sanitized_anchor_name v1.0.0 // indirect
 	github.com/shurcooL/vfsgen v0.0.0-20200627165143-92b8a710ab6c // indirect
-	github.com/sirupsen/logrus v1.6.0 // indirect
 	github.com/smartystreets/assertions v0.0.0-20180927180507-b2de0cb4f26d // indirect
 	github.com/smartystreets/goconvey v1.6.4 // indirect
 	github.com/soheilhy/cmux v0.1.4 // indirect

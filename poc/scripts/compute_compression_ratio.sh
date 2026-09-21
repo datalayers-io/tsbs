@@ -67,10 +67,18 @@ info "dldump 导出 ${DATABASE}.cpu_sample -> csv（超时 ${DLDUMP_TIMEOUT}s）
 timeout "${DLDUMP_TIMEOUT}s" ${DLDUMP_CMD} \
   || die "dldump 导出失败"
 
-CSV="${DUMP_DIR}/${DATABASE}_cpu_sample.csv"
-[ -f "${CSV}" ] || die "CSV 文件不存在: ${CSV}"
-CSV_SIZE="$(stat -c %s "${CSV}")"
-echo "csv 文件大小: ${CSV_SIZE} bytes (${CSV})"
+# 注意：dldump 的 CSV 导出会按 --max-file-size（默认 8GiB）轮转成多个文件
+#       `<db>_<table>_<seq>.csv`（如 ..._cpu_sample_0.csv、..._cpu_sample_1.csv），
+#       因此这里汇总所有分片文件的大小，而不是只看单个文件。
+CSV_SIZE=0
+CSV_COUNT=0
+for f in "${DUMP_DIR}/${DATABASE}_cpu_sample"*.csv; do
+  [ -f "${f}" ] || continue
+  CSV_SIZE=$(( CSV_SIZE + $(stat -c %s "${f}") ))
+  CSV_COUNT=$(( CSV_COUNT + 1 ))
+done
+[ "${CSV_COUNT}" -gt 0 ] || die "CSV 文件不存在: ${DUMP_DIR}/${DATABASE}_cpu_sample*.csv"
+echo "csv 文件大小: ${CSV_SIZE} bytes（${CSV_COUNT} 个文件，目录 ${DUMP_DIR}）"
 
 # ── 5. 计算三组比值 ───────────────────────────────────────────────────────
 PCT="$(awk -v a="${DL_SIZE}" -v b="${CSV_SIZE}" 'BEGIN{ printf "%.2f", a/b*100 }')"

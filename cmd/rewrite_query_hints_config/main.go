@@ -37,8 +37,9 @@ var hintRe = regexp.MustCompile(`/\*\+.*?\*/`)
 
 // HintConfig holds the SQL hint settings for one query type.
 type HintConfig struct {
-	ParallelDegree int  `yaml:"parallel_degree"`
-	SkipRollup     bool `yaml:"skip_rollup"`
+	ParallelDegree  int  `yaml:"parallel_degree"`
+	SkipRollup      bool `yaml:"skip_rollup"`
+	FastLastBuckets bool `yaml:"fast_last_buckets"`
 }
 
 // Config is the top-level YAML layout.
@@ -57,6 +58,9 @@ func buildHint(hc HintConfig) string {
 	}
 	if hc.SkipRollup {
 		parts = append(parts, "set_var(skip_rollup=1)")
+	}
+	if hc.FastLastBuckets {
+		parts = append(parts, "set_var(fast_last_buckets=1)")
 	}
 	if len(parts) == 0 {
 		return ""
@@ -168,8 +172,8 @@ func main() {
 		if fromDefault {
 			src = "default"
 		}
-		fmt.Printf("  %-42s rewrote %d queries (%s: hint=%s skip_rollup=%v)\n",
-			path, n, src, hint, hc.SkipRollup)
+		fmt.Printf("  %-42s rewrote %d queries (%s: hint=%s skip_rollup=%v fast_last_buckets=%v)\n",
+			path, n, src, hint, hc.SkipRollup, hc.FastLastBuckets)
 		rewritten++
 		return nil
 	})

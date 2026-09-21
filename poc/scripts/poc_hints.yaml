@@ -10,6 +10,7 @@
 default:
   parallel_degree: 8
   skip_rollup: false
+  fast_last_buckets: false
 
 queries:
   single-groupby-1-1-1:
@@ -57,3 +58,4 @@ queries:
   groupby-orderby-limit:
     parallel_degree: 4
     skip_rollup: false
+    fast_last_buckets: true

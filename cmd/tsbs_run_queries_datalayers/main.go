@@ -24,6 +24,28 @@ var (
 
 var parallelDegreeRe = regexp.MustCompile(`parallel_degree\s*=\s*(\d+)`)
 
+// Session boolean hint (`skip_rollup` / `fast_last_buckets`). Accept the same
+// switch spellings the server accepts: 1/0, true/false, on/off (case-insensitive).
+var switchHintRe = regexp.MustCompile(`(?i)(skip_rollup|fast_last_buckets)\s*=\s*([a-z0-9]+)`)
+
+// parseSwitchHint returns (present, value) for the requested hint key in raw.
+func parseSwitchHint(raw, key string) (bool, bool) {
+	for _, m := range switchHintRe.FindAllStringSubmatch(raw, -1) {
+		if !strings.EqualFold(m[1], key) {
+			continue
+		}
+		switch strings.ToLower(m[2]) {
+		case "1", "true", "on":
+			return true, true
+		case "0", "false", "off":
+			return true, false
+		default:
+			return false, false
+		}
+	}
+	return false, false
+}
+
 func addDatalayersSpecificFlags() {
 	pflag.String("sql-endpoint", "127.0.0.1:8360", "The Arrow Flight SQL endpoint exposed by the Datalayers server")
 }
@@ -69,6 +91,7 @@ func reportQueryFileHints(path string) {
 
 	degrees := map[int]struct{}{}
 	skipRollup := map[bool]struct{}{}
+	fastLastBuckets := map[bool]struct{}{}
 	n := 0
 	dec := gob.NewDecoder(f)
 	for {
@@ -82,7 +105,16 @@ func reportQueryFileHints(path string) {
 				degrees[d] = struct{}{}
 			}
 		}
-		skipRollup[strings.Contains(raw, "skip_rollup=1")] = struct{}{}
+		if present, v := parseSwitchHint(raw, "skip_rollup"); present {
+			skipRollup[v] = struct{}{}
+		} else {
+			skipRollup[false] = struct{}{}
+		}
+		if present, v := parseSwitchHint(raw, "fast_last_buckets"); present {
+			fastLastBuckets[v] = struct{}{}
+		} else {
+			fastLastBuckets[false] = struct{}{}
+		}
 		n++
 	}
 
@@ -96,8 +128,13 @@ func reportQueryFileHints(path string) {
 		ss = append(ss, b)
 	}
 	sort.Slice(ss, func(i, j int) bool { return !ss[i] && ss[j] })
+	var flb []bool
+	for b := range fastLastBuckets {
+		flb = append(flb, b)
+	}
+	sort.Slice(flb, func(i, j int) bool { return !flb[i] && flb[j] })
 
-	fmt.Printf("query file %s: %d queries, parallel_degree=%v, skip_rollup=%v\n", path, n, ds, ss)
+	fmt.Printf("query file %s: %d queries, parallel_degree=%v, skip_rollup=%v, fast_last_buckets=%v\n", path, n, ds, ss, flb)
 }
 
 func main() {

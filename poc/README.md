@@ -188,7 +188,8 @@ poc/
     `dldump -f csv` 导出 cpu_sample 到 CSV → 计算 csv 大小 → 打印三组比值：
     1) datalayers 是 csv 的百分之多少；2) csv 是 datalayers 的多少倍；
     3) datalayers:csv（datalayers 取 1）。
-  - 依赖 `dldump`（`-h/-P/-u/-p/-d/-t/-o/-f csv`，输出 `<output>/<db>_<table>.csv`）。
+  - 依赖 `dldump`（`-h/-P/-u/-p/-d/-t/-o/-f csv`；CSV 会按 `--max-file-size`（默认 8GiB）轮转为
+    `<output>/<db>_<table>_<seq>.csv`，脚本会汇总所有分片的大小）。
   - 用法：`./poc/scripts/compute_compression_ratio.sh [config.yaml]`。
   - 输出：`./results/compression-<时间戳>/`。
 

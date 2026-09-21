@@ -11,7 +11,7 @@ http_addr: localhost:8361
 dlsql_dir: ""
 
 # dldump 工具目录（填绝对路径，例如 /opt/datalayers/bin；留空则直接在 PATH 中执行 dldump）
-dldump_dir: /home/nsc/datalayers/target/debug
+dldump_dir: ""
 
 # 传给 dlsql 的附加参数（例如需要指定默认库时填 "-d default"；留空则不传）
 dlsql_extra_args: ""

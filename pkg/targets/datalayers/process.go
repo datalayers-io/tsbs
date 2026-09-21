@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/prometheus/common/log"
 	"github.com/timescale/tsbs/pkg/targets"
 	datalayers "github.com/timescale/tsbs/pkg/targets/datalayers/client"
 

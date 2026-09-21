@@ -49,7 +49,7 @@ QUERY_TYPES=(
 )
 
 SUMMARY_TSV="${RESULTS_DIR}/summary.tsv"
-printf "query\tparallel_degree\tskip_rollup\tmean_ms\tqps\n" > "${SUMMARY_TSV}"
+printf "query\tparallel_degree\tskip_rollup\tfast_last_buckets\tmean_ms\tqps\n" > "${SUMMARY_TSV}"
 
 TOTAL="${#QUERY_TYPES[@]}"
 for i in "${!QUERY_TYPES[@]}"; do
@@ -59,7 +59,7 @@ for i in "${!QUERY_TYPES[@]}"; do
 
   if [ ! -f "${f}" ]; then
     echo "[${idx}/${TOTAL}] WARN: 缺少查询文件 ${f}，跳过" >&2
-    printf "%s\tNA\tNA\tNA\tNA\n" "${qt}" >> "${SUMMARY_TSV}"
+    printf "%s\tNA\tNA\tNA\tNA\tNA\n" "${qt}" >> "${SUMMARY_TSV}"
     continue
   fi
 
@@ -87,19 +87,26 @@ for i in "${!QUERY_TYPES[@]}"; do
   case "${sr_raw}" in
     *true*) sr="true" ;;
   esac
+  # fast_last_buckets：只有 SQL hint 中出现 fast_last_buckets=1 才显示 true，否则 N/A
+  flb_raw=$(printf '%s' "${hdr}" | grep -oE "fast_last_buckets=\[(true|false)\]" \
+        | sed -E 's/fast_last_buckets=//; s/\[|\]//g' || true)
+  flb="N/A"
+  case "${flb_raw}" in
+    *true*) flb="true" ;;
+  esac
   mean=$(grep -oE "mean: +[0-9.]+ms" "${log}" | head -1 | grep -oE "[0-9.]+" | head -1 || true)
   qps=$(grep -oE "Overall query rate +[0-9.]+ queries/sec" "${log}" | head -1 | grep -oE "[0-9.]+" || true)
 
-  printf "%s\t%s\t%s\t%s\t%s\n" "${qt}" "${pd}" "${sr}" "${mean:-N/A}" "${qps:-N/A}" >> "${SUMMARY_TSV}"
+  printf "%s\t%s\t%s\t%s\t%s\t%s\n" "${qt}" "${pd}" "${sr}" "${flb}" "${mean:-N/A}" "${qps:-N/A}" >> "${SUMMARY_TSV}"
 done
 
 echo ""
 echo "=== POC Query Summary ==="
-printf "%-24s %-13s %-10s %12s %12s\n" "query" "parallel_degree" "skip_rollup" "mean(ms)" "qps"
-printf "%-24s %-13s %-10s %12s %12s\n" "------------------------" "-------------" "----------" "------------" "------------"
-while IFS=$'\t' read -r q pd sr mean qps; do
+printf "%-24s %-13s %-10s %-16s %12s %12s\n" "query" "parallel_degree" "skip_rollup" "fast_last_buckets" "mean(ms)" "qps"
+printf "%-24s %-13s %-10s %-16s %12s %12s\n" "------------------------" "-------------" "----------" "----------------" "------------" "------------"
+while IFS=$'\t' read -r q pd sr flb mean qps; do
   [ "${q}" = "query" ] && continue
-  printf "%-24s %-13s %-10s %12s %12s\n" "${q}" "${pd}" "${sr}" "${mean}" "${qps}"
+  printf "%-24s %-13s %-10s %-16s %12s %12s\n" "${q}" "${pd}" "${sr}" "${flb}" "${mean}" "${qps}"
 done < "${SUMMARY_TSV}"
 echo ""
 echo "summary  : ${SUMMARY_TSV}"

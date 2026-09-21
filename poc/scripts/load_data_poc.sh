@@ -52,4 +52,12 @@ if [ -n "${SQL_ENDPOINT:-}" ]; then
 fi
 ARGS+=(--data-source.file.location="${DATA_FILE}")
 
+# 额外的 loader 覆盖参数（空格分隔的 --key=value 列表）。
+# 供稳定性测试覆盖目标库/并发等，例如：
+#   LOAD_EXTRA_ARGS="--loader.runner.db-name=benchmark_stable --loader.runner.workers=8"
+# shellcheck disable=SC2206
+if [ -n "${LOAD_EXTRA_ARGS:-}" ]; then
+  ARGS+=(${LOAD_EXTRA_ARGS})
+fi
+
 ./bin/tsbs_load load datalayers --config=./poc/load_config/${CONFIG_FILE} "${ARGS[@]}"

@@ -3,7 +3,6 @@ package datalayers
 import (
 	"errors"
 
-	"github.com/prometheus/common/log"
 	"github.com/timescale/tsbs/pkg/data/source"
 	"github.com/timescale/tsbs/pkg/targets"
 	datalayers "github.com/timescale/tsbs/pkg/targets/datalayers/client"
