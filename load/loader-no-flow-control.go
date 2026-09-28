@@ -66,6 +66,7 @@ func (l *noFlowBenchmarkRunner) work(b targets.Benchmark, wg *sync.WaitGroup, c 
 	case targets.ProcessorCloser:
 		c.Close(l.DoLoad)
 	}
+	l.aggregateLatency(proc)
 
 	wg.Done()
 }

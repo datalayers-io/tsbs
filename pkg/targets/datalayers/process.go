@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/HdrHistogram/hdrhistogram-go"
 	"github.com/timescale/tsbs/pkg/targets"
 	datalayers "github.com/timescale/tsbs/pkg/targets/datalayers/client"
 
@@ -59,6 +60,13 @@ type processor struct {
 	client             *datalayers.Client
 	arrowRecordBuilder *array.RecordBuilder
 	preparedStatement  *flightsql.PreparedStatement
+	// Write latency accounting for the successful batch INSERTs issued by this
+	// worker. latencySum is the total duration spent in ExecuteInsertPrepare
+	// (the DB write round trip), batchCnt is the number of batches written, and
+	// latencyHist tracks the per-batch write latency distribution.
+	latencySum  time.Duration
+	batchCnt    uint64
+	latencyHist *hdrhistogram.Histogram
 }
 
 func NewProcessor(client *datalayers.Client, targetDB string, batchSize int, fileName string) targets.Processor {
@@ -92,7 +100,18 @@ func NewProcessor(client *datalayers.Client, targetDB string, batchSize int, fil
 	arrowRecordBuilder := array.NewRecordBuilder(memory.NewGoAllocator(), arrowSchema)
 	arrowRecordBuilder.Reserve(batchSize)
 
-	return &processor{targetDB, batchSize, client, arrowRecordBuilder, preparedStatement}
+	// Track per-batch write latency in nanoseconds up to one hour, with 4
+	// significant digits of precision (same scheme used by TSBS query stats).
+	latencyHist := hdrhistogram.New(1, time.Hour.Nanoseconds(), 4)
+
+	return &processor{
+		targetDB:           targetDB,
+		batchSize:          batchSize,
+		client:             client,
+		arrowRecordBuilder: arrowRecordBuilder,
+		preparedStatement:  preparedStatement,
+		latencyHist:        latencyHist,
+	}
 }
 
 // Init does per-worker setup needed before receiving data
@@ -126,15 +145,36 @@ func (proc *processor) ProcessBatch(b targets.Batch, doLoad bool) (metricCount, 
 
 		if doLoad {
 			proc.preparedStatement.SetParameters(record)
+			start := time.Now()
 			err := proc.client.ExecuteInsertPrepare(proc.preparedStatement)
 			if err != nil {
 				log.Error(err)
+			} else {
+				// Only account successful writes so retries/errors don't skew
+				// the average latency.
+				latency := time.Since(start)
+				proc.latencySum += latency
+				proc.batchCnt++
+				proc.latencyHist.RecordValue(latency.Nanoseconds())
 			}
 		}
 		record.Release()
 	}
 
 	return metricCount, rowCount
+}
+
+// Latency returns the accumulated write latency (total nanoseconds spent in
+// ExecuteInsertPrepare) and the number of successfully written batches. This
+// lets the loader aggregate per-worker latencies into an overall average.
+func (proc *processor) Latency() (time.Duration, uint64) {
+	return proc.latencySum, proc.batchCnt
+}
+
+// LatencyHistogram returns the per-batch write latency histogram collected by
+// this worker.
+func (proc *processor) LatencyHistogram() *hdrhistogram.Histogram {
+	return proc.latencyHist
 }
 
 func appendRow(arrowRecordBuilder *array.RecordBuilder, values []string) {

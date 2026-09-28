@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/HdrHistogram/hdrhistogram-go"
 	"github.com/timescale/tsbs/pkg/targets"
 	"github.com/timescale/tsbs/pkg/targets/datalayers"
 
@@ -77,10 +78,28 @@ type BenchmarkRunner interface {
 // flags across all database systems and ultimately running a supplied Benchmark
 type CommonBenchmarkRunner struct {
 	BenchmarkRunnerConfig
-	metricCnt      uint64
-	rowCnt         uint64
+	metricCnt uint64
+	rowCnt    uint64
+	// Write latency aggregation. latencyNs is the total time spent in the DB
+	// write round trip across all workers (atomic); batchCnt is the number of
+	// successfully written batches; latencyHist holds the merged per-batch
+	// latency distribution for percentile reporting. Populated from processors
+	// implementing latencyReporter.
+	latencyNs      int64
+	batchCnt       uint64
+	latencyHist    *hdrhistogram.Histogram
+	latencyMu      sync.Mutex
 	initialRand    *rand.Rand
 	sleepRegulator insertstrategy.SleepRegulator
+}
+
+// latencyReporter is implemented by processors that can report their own write
+// latency. It returns the total latency accumulated across the processor's
+// successful batch writes and the number of such batches, plus the per-batch
+// latency histogram used for percentile reporting.
+type latencyReporter interface {
+	Latency() (time.Duration, uint64)
+	LatencyHistogram() *hdrhistogram.Histogram
 }
 
 func GetBenchmarkRunner(c BenchmarkRunnerConfig) BenchmarkRunner {
@@ -156,6 +175,16 @@ func (l *CommonBenchmarkRunner) saveTestResult(took time.Duration, start time.Ti
 	totals["metricRate"] = metricRate
 	if l.rowCnt > 0 {
 		totals["rowRate"] = rowRate
+	}
+	if l.batchCnt > 0 {
+		avgLatencyMillis := float64(l.latencyNs) / float64(l.batchCnt) / float64(time.Millisecond)
+		totals["avgBatchLatencyMillis"] = avgLatencyMillis
+		totals["batchCount"] = l.batchCnt
+		if l.latencyHist != nil {
+			totals["p50BatchLatencyMillis"] = float64(l.latencyHist.ValueAtQuantile(50)) / float64(time.Millisecond)
+			totals["p99BatchLatencyMillis"] = float64(l.latencyHist.ValueAtQuantile(99)) / float64(time.Millisecond)
+			totals["p999BatchLatencyMillis"] = float64(l.latencyHist.ValueAtQuantile(99.9)) / float64(time.Millisecond)
+		}
 	}
 
 	testResult := LoaderTestResult{
@@ -296,8 +325,36 @@ func (l *CommonBenchmarkRunner) work(b targets.Benchmark, wg *sync.WaitGroup, c 
 	case targets.ProcessorCloser:
 		c.Close(l.DoLoad)
 	}
+	l.aggregateLatency(proc)
 
 	wg.Done()
+}
+
+// aggregateLatency accumulates a processor's write latency into the runner
+// totals, if the processor reports it.
+func (l *CommonBenchmarkRunner) aggregateLatency(proc targets.Processor) {
+	r, ok := proc.(latencyReporter)
+	if !ok {
+		return
+	}
+	sum, cnt := r.Latency()
+	atomic.AddInt64(&l.latencyNs, int64(sum))
+	atomic.AddUint64(&l.batchCnt, cnt)
+
+	if h := r.LatencyHistogram(); h != nil {
+		l.latencyMu.Lock()
+		defer l.latencyMu.Unlock()
+		if l.latencyHist == nil {
+			// Use the same range/significant figures as the worker histograms so
+			// that merging does not drop any recorded values.
+			l.latencyHist = hdrhistogram.New(
+				h.LowestTrackableValue(),
+				h.HighestTrackableValue(),
+				int(h.SignificantFigures()),
+			)
+		}
+		l.latencyHist.Merge(h)
+	}
 }
 
 func (l *CommonBenchmarkRunner) timeToSleep(workerNum uint, startedWorkAt time.Time) {
@@ -314,6 +371,16 @@ func (l *CommonBenchmarkRunner) summary(took time.Duration) {
 	if l.rowCnt > 0 {
 		rowRate := float64(l.rowCnt) / float64(took.Seconds())
 		printFn("loaded %d rows in %0.3fsec with %d workers (mean rate %0.2f rows/sec)\n", l.rowCnt, took.Seconds(), l.Workers, rowRate)
+	}
+	if l.batchCnt > 0 {
+		avg := time.Duration(float64(l.latencyNs) / float64(l.batchCnt))
+		printFn("avg batch insert latency: %v (%d batches)\n", avg, l.batchCnt)
+		if l.latencyHist != nil {
+			printFn("batch insert latency percentiles: p50=%v p99=%v p99.9=%v\n",
+				time.Duration(l.latencyHist.ValueAtQuantile(50)),
+				time.Duration(l.latencyHist.ValueAtQuantile(99)),
+				time.Duration(l.latencyHist.ValueAtQuantile(99.9)))
+		}
 	}
 }
 
