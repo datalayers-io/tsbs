@@ -26,6 +26,8 @@ WORKERS="$1"
 PRINT_INTERVAL="${2:-100}"
 QUERY_DIR="${3:-./generated_query/datalayers/cpu-only/poc}"
 SQL_ENDPOINT="${SQL_ENDPOINT:-localhost:8360}"
+# 目标库跟随 bench 配置的 database（bench.sh 会 export DATABASE）；默认 benchmark。
+DATABASE="${DATABASE:-benchmark}"
 RESULTS_DIR="${RESULTS_DIR:-./results/poc-$(date +%Y%m%d-%H%M%S)}"
 
 mkdir -p "${RESULTS_DIR}"
@@ -70,6 +72,7 @@ for i in "${!QUERY_TYPES[@]}"; do
   ./bin/tsbs_run_queries_datalayers \
     --file="${f}" \
     --sql-endpoint="${SQL_ENDPOINT}" \
+    --db-name="${DATABASE}" \
     --workers="${WORKERS}" \
     --burn-in=10 \
     --print-interval="${PRINT_INTERVAL}" \

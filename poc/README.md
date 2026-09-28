@@ -128,7 +128,11 @@ poc/
   - `dlsql_extra_args`：传给 dlsql 的附加参数（如 `-d default`）
   - `dlsql_timeout`：dlsql 执行 SQL 的超时秒数（默认 300，避免 DDL 卡死）
   - `dldump_timeout`：dldump 导出的超时秒数（默认 600）
-  - `database`：目标数据库名（默认 benchmark）
+  - `database`：目标数据库名（默认 benchmark）。**该值会被忠实使用**：建库建表
+    （create.sql）、灌数（`--loader.runner.db-name`）、rollup、查询
+    （`--db-name`）都落到这个库。
+  - `scale` / `stale_scale`：fresh/stale 数据集主机数（默认 1000000/100000），
+    决定生成数据与查询的规模；可被环境变量 `POC_SCALE` / `POC_STALE_SCALE` 覆盖。
   - `create_db_table` / `gen_data` / `gen_queries` / `load_data` / `create_rollup`
     / `run_queries`：各步骤开关（true/false），`create_rollup` 在 load 完成后建
     cpu 的 1h rollup 表 cpu_rollup_1h
@@ -141,6 +145,9 @@ poc/
   - 启动时探测：datalayers HTTP/Flight 端口 TCP 可通、dlsql 可用、5 个 tsbs
     二进制齐全。
   - 按配置依次执行建库建表、生成数据、生成查询、灌数、跑全部查询。
+  - 传入的 config 会被**忠实使用**：`BENCH_CONFIG` 会广播给各子脚本（test_alter.sh /
+    compute_compression_ratio.sh 等），`database` 决定建库/灌数/rollup/查询的库，
+    `scale`/`stale_scale` 决定生成的数据量（环境变量优先）。
   - 建库建表用 `dlsql --load-file poc/sql/create.sql`，**dlsql 连接的是 Arrow
     Flight SQL 端口（flight_addr），不是 HTTP 端口**。
   - 灌数/查询结果写入 `./results/poc-<时间戳>/`，最后打印 load 指标

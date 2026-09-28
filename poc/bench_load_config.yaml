@@ -27,6 +27,12 @@ dldump_timeout: 600
 # 目标数据库名（建库建表/alter/压缩率计算等 SQL 使用的库）
 database: benchmark
 
+# fresh 数据集主机数（生成数据使用；可被环境变量 POC_SCALE 覆盖）
+scale: 1000000
+
+# stale 数据集主机数（生成过期数据使用；可被环境变量 POC_STALE_SCALE 覆盖）
+stale_scale: 100000
+
 # 为 true 则用 dlsql --load-file 执行 poc/sql/create.sql 建库建表
 create_db_table: true
 

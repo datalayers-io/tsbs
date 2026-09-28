@@ -14,6 +14,9 @@
 #   - 不传参数则使用 ./poc/bench_config.yaml
 #   - 带 smoke 时进入小规模冒烟模式：POC_SCALE=1000、POC_STALE_SCALE=100
 #     （数据量约 fresh 168MB / stale 17MB），快速验证全流程
+#   - 传入的 config 会被忠实使用：database 决定建库/灌数/rollup/查询的库，
+#     scale / stale_scale 决定生成的数据量（亦可被环境变量 POC_SCALE 覆盖），
+#     且 BENCH_CONFIG 会广播给各子脚本（test_alter.sh / compute_compression_ratio.sh 等）。
 #
 # 结果输出：./results/poc-<时间戳>/（load 日志 + 查询汇总表格）
 #
@@ -35,6 +38,11 @@ case "${1:-}" in
     ;;
 esac
 [ -f "${CONFIG}" ] || { echo "ERROR: 配置文件不存在: ${CONFIG}" >&2; exit 1; }
+
+# 把传入的 config 广播给所有子脚本（bench_common.sh 的 BENCH_CONFIG 默认值被覆盖），
+# 保证 load_data_poc.sh / test_alter.sh / compute_compression_ratio.sh 等读到的
+# 都是同一个配置文件，而不是固定的 poc/bench_config.yaml。
+export BENCH_CONFIG="${CONFIG}"
 
 # ── 读取配置（扁平 key: value 的 yaml）───────────────────────────────────
 get_cfg() {
@@ -58,6 +66,9 @@ LOAD_DATA="$(get_cfg load_data "true")"
 CREATE_ROLLUP="$(get_cfg create_rollup "false")"
 RUN_QUERIES="$(get_cfg run_queries "true")"
 QUERY_WORKERS="$(get_cfg query_workers "64")"
+# 数据规模也可由 config 控制（scale / stale_scale），优先级：环境变量 > config > 默认值。
+CFG_SCALE="$(get_cfg scale "")"
+CFG_STALE_SCALE="$(get_cfg stale_scale "")"
 
 is_true() { [ "${1}" = "true" ]; }
 
@@ -73,8 +84,15 @@ if [ "${SMOKE}" -eq 1 ]; then
   echo ">>> SMOKE 冒烟模式：fresh scale=${POC_SCALE}（约 $(est_size 1000) 数据, 1440000 行）, "
   echo "    stale scale=${POC_STALE_SCALE}（约 $(est_size 100) 数据, 144000 行）"
 fi
-FRESH_SCALE="${POC_SCALE:-1000000}"
-STALE_SCALE="${POC_STALE_SCALE:-100000}"
+FRESH_SCALE="${POC_SCALE:-${CFG_SCALE:-1000000}}"
+STALE_SCALE="${POC_STALE_SCALE:-${CFG_STALE_SCALE:-100000}}"
+# 广播给子脚本：gen_data_poc.sh / gen_queries_poc.sh 据此生成数据与查询。
+export POC_SCALE="${FRESH_SCALE}"
+export POC_STALE_SCALE="${STALE_SCALE}"
+# 广播给子脚本：load_data_poc.sh / run_all_queries_poc.sh / run_queries_poc.sh
+# 据此写/读目标库（--loader.runner.db-name / --db-name），保持建库-灌数-查询一致。
+export DATABASE="${DATABASE}"
+export SQL_ENDPOINT="${FLIGHT_ADDR}"
 
 RESULTS_DIR="./results/poc-$(date +%Y%m%d-%H%M%S)"
 mkdir -p "${RESULTS_DIR}"
@@ -124,14 +142,18 @@ echo "OK  tsbs 二进制齐全"
 # ── 建库建表 ─────────────────────────────────────────────────────────────
 if is_true "${CREATE_DB_TABLE}"; then
   echo ""
-  echo "==> create_db_table: 用 dlsql 执行 ${SCRIPT_DIR}/sql/create.sql（超时 ${DLSQL_TIMEOUT}s）"
+  echo "==> create_db_table: 用 dlsql 执行 ${SCRIPT_DIR}/sql/create.sql（库=${DATABASE}，超时 ${DLSQL_TIMEOUT}s）"
   # dlsql 连接的是 Arrow Flight SQL 端口（flight_addr），而非 HTTP 端口。
   # dlsql 无内置超时，这里用 timeout 包裹避免服务端 DDL 卡住时脚本无限等待。
+  # create.sql 里库名写死为 benchmark，这里按配置的 database 渲染一份到结果目录
+  # （不改动仓库里共享的 SQL 文件），保证传入 config 的 database 被忠实使用。
+  CREATE_SQL_RENDERED="${RESULTS_DIR}/create.sql"
+  sed "s/\bbenchmark\b/${DATABASE}/g" "${SCRIPT_DIR}/sql/create.sql" > "${CREATE_SQL_RENDERED}"
   # shellcheck disable=SC2086
   timeout "${DLSQL_TIMEOUT}s" "${DLSQL_BIN}" -h "${FLIGHT_HOST}" -P "${FLIGHT_PORT}" \
-    ${DLSQL_EXTRA_ARGS} --load-file "${SCRIPT_DIR}/sql/create.sql" \
+    ${DLSQL_EXTRA_ARGS} --load-file "${CREATE_SQL_RENDERED}" \
     || { echo "ERROR: 执行 create.sql 失败或超时（${DLSQL_TIMEOUT}s）。可调大 dlsql_timeout 后重试。" >&2; exit 1; }
-  echo "OK  建库建表完成"
+  echo "OK  建库建表完成（库=${DATABASE}）"
 fi
 
 # ── 生成数据 ─────────────────────────────────────────────────────────────
@@ -171,9 +193,12 @@ fi
 # ── 建 rollup（必须在 load fresh + stale 数据完成后）─────────────────────
 if is_true "${CREATE_ROLLUP}"; then
   echo ""
-  echo "==> create_rollup: 用 dlsql 执行 ${SCRIPT_DIR}/sql/rollup.sql（cpu_rollup_1h, 1h 窗口, 超时 ${DLSQL_TIMEOUT}s）"
+  echo "==> create_rollup: 用 dlsql 执行 ${SCRIPT_DIR}/sql/rollup.sql（cpu_rollup_1h, 1h 窗口, 库=${DATABASE}, 超时 ${DLSQL_TIMEOUT}s）"
+  # 与 create.sql 同理，把 rollup.sql 里的 benchmark 库名替换为配置的 database。
+  ROLLUP_SQL_RENDERED="${RESULTS_DIR}/rollup.sql"
+  sed "s/\bbenchmark\b/${DATABASE}/g" "${SCRIPT_DIR}/sql/rollup.sql" > "${ROLLUP_SQL_RENDERED}"
   timeout "${DLSQL_TIMEOUT}s" "${DLSQL_BIN}" -h "${FLIGHT_HOST}" -P "${FLIGHT_PORT}" \
-    -d "${DATABASE}" --load-file "${SCRIPT_DIR}/sql/rollup.sql" \
+    -d "${DATABASE}" --load-file "${ROLLUP_SQL_RENDERED}" \
     || { echo "ERROR: 创建 rollup（cpu_rollup_1h）失败或超时（${DLSQL_TIMEOUT}s）。" >&2; exit 1; }
   echo "OK  rollup 创建完成（cpu_rollup_1h, INTERVAL 1h）"
 fi

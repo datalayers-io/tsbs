@@ -19,6 +19,12 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 cd "${REPO_DIR}"
 
+# 读取 bench 配置中的 database（经 bench.sh 的 BENCH_CONFIG 广播），
+# 让目标库跟随配置（load_config/*.yaml 里的 db-name 仅为默认值）。
+# shellcheck source=bench_common.sh
+. "${SCRIPT_DIR}/bench_common.sh"
+load_bench_config
+
 unset http_proxy https_proxy
 
 MODE="${1:-}"
@@ -51,6 +57,11 @@ if [ -n "${SQL_ENDPOINT:-}" ]; then
   ARGS+=(--loader.db-specific.sql-endpoint="${SQL_ENDPOINT}")
 fi
 ARGS+=(--data-source.file.location="${DATA_FILE}")
+# 目标库跟随 bench 配置（load_config/*.yaml 里的 db-name: benchmark 仅作默认）。
+# 放在 LOAD_EXTRA_ARGS 之前，保证稳定性测试等通过 LOAD_EXTRA_ARGS 覆盖时后者生效。
+if [ -n "${DATABASE:-}" ]; then
+  ARGS+=(--loader.runner.db-name="${DATABASE}")
+fi
 
 # 额外的 loader 覆盖参数（空格分隔的 --key=value 列表）。
 # 供稳定性测试覆盖目标库/并发等，例如：
