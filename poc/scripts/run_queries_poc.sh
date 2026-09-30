@@ -18,6 +18,9 @@ cd "${REPO_DIR}"
 
 SQL_ENDPOINT="${SQL_ENDPOINT:-localhost:8360}"
 
+# 目标库跟随 bench 配置的 database（bench.sh 会 export DATABASE）；默认 benchmark。
+DATABASE="${DATABASE:-benchmark}"
+
 if [ "$#" -ne 2 ]; then
   echo "Usage: $0 <workers> <query-number (1~15)>"
   exit 1
@@ -56,5 +59,6 @@ QUERY_FILE="./generated_query/datalayers/cpu-only/poc/${QUERY_TYPE}.query"
 ./bin/tsbs_run_queries_datalayers \
     --file="$QUERY_FILE" \
     --sql-endpoint="${SQL_ENDPOINT}" \
+    --db-name="${DATABASE}" \
     --workers=$WORKERS \
     --burn-in=10

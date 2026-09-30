@@ -183,8 +183,12 @@ fi
 # ── 前置：建写入库/表（可选）与生成查询文件（一次）──────────────────────
 if [ "${CREATE_TABLE}" -eq 1 ]; then
   log "执行 poc/sql/create_stable.sql（建 ${LOAD_DB}.cpu）"
+  # create_stable.sql 里库名写死为 benchmark_stable，这里按 --load-db 渲染一份
+  # 到结果目录，保证自定义写入库时建表仍落在正确位置（不改动共享 SQL）。
+  CREATE_STABLE_RENDERED="${CONF_DIR}/create_stable.sql"
+  sed "s/\bbenchmark_stable\b/${LOAD_DB}/g" "${SCRIPT_DIR}/../sql/create_stable.sql" > "${CREATE_STABLE_RENDERED}"
   timeout 300 "${DLSQL_BIN}" -h "${FLIGHT_HOST}" -P "${FLIGHT_PORT}" -u admin -p public \
-    --load-file "${SCRIPT_DIR}/../sql/create_stable.sql" \
+    --load-file "${CREATE_STABLE_RENDERED}" \
     || { log "ERROR: 建表失败"; exit 1; }
 fi
 
